@@ -1,4 +1,4 @@
-# New GitHub Stats
+# GitHub Stats
 
 A small API for generating GitHub stats cards for README profiles, websites, and dashboards.
 
