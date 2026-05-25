@@ -9,19 +9,19 @@ A small API for generating GitHub stats cards for README profiles, websites, and
 Use the SVG endpoint directly in Markdown:
 
 ```md
-![GitHub Stats](https://your-domain.vercel.app/api/stats?username=Ash310u)
+![GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u)
 ```
 
 Use a dark GitHub-style theme:
 
 ```md
-![GitHub Stats](https://your-domain.vercel.app/api/stats?username=Ash310u&theme=github_dark)
+![GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&theme=github_dark)
 ```
 
 Get raw JSON instead of an SVG card:
 
 ```text
-https://your-domain.vercel.app/api/stats?username=Ash310u&format=json
+https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&format=json
 ```
 
 Example JSON response:
