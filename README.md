@@ -2,7 +2,7 @@
 
 A small API for generating GitHub stats cards for README profiles, websites, and dashboards.
 
-![GitHub stats card preview](./design.png)
+![GitHub stats card preview](./profile_ss.png)
 
 ## Use The API
 
