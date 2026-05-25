@@ -5,7 +5,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 const themes = {
-  light: {
+  github_light: {
     background: "#ffffff",
     border: "#d0d7de",
     title: "#0969da",
@@ -13,7 +13,7 @@ const themes = {
     muted: "#57606a",
     accent: "#2da44e"
   },
-  dark: {
+  github_dark: {
     background: "#0d1117",
     border: "#30363d",
     title: "#58a6ff",
@@ -21,6 +21,11 @@ const themes = {
     muted: "#8b949e",
     accent: "#3fb950"
   }
+};
+
+const themeAliases = {
+  light: "github_light",
+  dark: "github_dark"
 };
 
 function send(response, status, body, headers = {}) {
@@ -50,7 +55,7 @@ function escapeHtml(value) {
 async function githubRequest(path) {
   const headers = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "new-github-stats"
+    "User-Agent": "github-stats"
   };
 
   if (GITHUB_TOKEN) {
@@ -145,7 +150,8 @@ function renderStat(label, value, x, y, theme) {
 }
 
 function renderSvg(stats, themeName) {
-  const theme = themes[themeName] || themes.light;
+  const resolvedThemeName = themeAliases[themeName] || themeName;
+  const theme = themes[resolvedThemeName] || themes.github_light;
   const displayName = stats.name || stats.username;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -162,7 +168,7 @@ function renderSvg(stats, themeName) {
     ${renderStat("Total PRs", stats.totalPullRequests, 428, 128, theme)}
     ${renderStat("Total Issues", stats.totalIssues, 28, 202, theme)}
     ${renderStat("Contributed To", stats.contributedTo, 228, 202, theme)}
-    <text x="612" y="234" text-anchor="end" fill="${theme.muted}" font-size="13">new-github-stats</text>
+    <text x="612" y="234" text-anchor="end" fill="${theme.muted}" font-size="13">github-stats</text>
   </g>
 </svg>`;
 }
@@ -170,7 +176,7 @@ function renderSvg(stats, themeName) {
 async function handleStats(request, response, url) {
   const username = url.searchParams.get("username");
   const format = url.searchParams.get("format") || "svg";
-  const theme = url.searchParams.get("theme") || "light";
+  const theme = url.searchParams.get("theme") || "github_light";
 
   if (!username) {
     sendJson(response, 400, {
@@ -229,5 +235,5 @@ server.on("error", (error) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`new-github-stats listening on http://${HOST}:${PORT}`);
+  console.log(`github-stats listening on http://${HOST}:${PORT}`);
 });

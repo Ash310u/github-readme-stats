@@ -19,6 +19,12 @@ GET /api/stats?username=octocat
 Returns an SVG stats card.
 
 ```text
+GET /api/stats?username=octocat&theme=github_dark
+```
+
+Returns the same SVG stats card with the GitHub dark theme.
+
+```text
 GET /api/stats?username=octocat&format=json
 ```
 
@@ -48,7 +54,12 @@ GITHUB_TOKEN=your_token npm start
 
 - `username`: required GitHub username.
 - `format`: `svg` or `json`, defaults to `svg`.
-- `theme`: `light` or `dark`, defaults to `light`.
+- `theme`: `github_light` or `github_dark`, defaults to `github_light`.
+
+Short aliases also work:
+
+- `light`
+- `dark`
 
 ## Stats Shown
 

@@ -1,5 +1,5 @@
 {
-  "name": "new-github-stats",
+  "name": "github-stats",
   "version": "1.0.0",
   "description": "A small standalone API for rendering GitHub profile stats.",
   "type": "module",
