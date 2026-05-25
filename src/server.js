@@ -214,7 +214,7 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/" || url.pathname === "/health") {
     sendJson(response, 200, {
       ok: true,
-      endpoint: "/api/stats?username=octocat"
+      endpoint: "/api/stats?username=Ash310u"
     });
     return;
   }
