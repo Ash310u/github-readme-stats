@@ -1,0 +1,21 @@
+{
+  "name": "new-github-stats",
+  "version": "1.0.0",
+  "description": "A small standalone API for rendering GitHub profile stats.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "github",
+    "stats",
+    "api",
+    "svg"
+  ],
+  "license": "MIT"
+}
