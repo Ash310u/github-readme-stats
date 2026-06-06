@@ -73,6 +73,11 @@ export async function githubGraphqlRequest(query, variables) {
   return data.data;
 }
 
+export async function fetchRepoStars(owner, repo) {
+  const data = await githubRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+  return data.stargazers_count ?? 0;
+}
+
 export async function fetchAllUserRepos(username) {
   const repos = [];
   let page = 1;

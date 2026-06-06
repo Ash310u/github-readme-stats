@@ -1,3 +1,4 @@
+import { handleRepoStars } from "../controllers/repo.controller.js";
 import {
   handleActivity,
   handleCustom,
@@ -30,6 +31,11 @@ export async function routeRequest(request, response) {
       await route.handler(request, response, url);
       return;
     }
+  }
+
+  if (url.pathname === "/api/repo/stars") {
+    await handleRepoStars(request, response);
+    return;
   }
 
   if (url.pathname === "/health") {
