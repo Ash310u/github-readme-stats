@@ -29,15 +29,95 @@ function normalizeDate(value, fallback) {
   return Number.isNaN(date.getTime()) ? fallback : date;
 }
 
+async function fetchJoinYearStart(username) {
+  const user = await githubRequest(`/users/${encodeURIComponent(username)}`);
+  const created = new Date(user.created_at);
+
+  return new Date(Date.UTC(created.getUTCFullYear(), 0, 1));
+}
+
+async function resolveFromDate(username, fromValue, fallback) {
+  if (fromValue === "joined") {
+    return fetchJoinYearStart(username);
+  }
+
+  return normalizeDate(fromValue, fallback);
+}
+
 function flattenContributionDays(calendar) {
   return calendar.weeks.flatMap((week) => week.contributionDays);
 }
 
-async function fetchContributionCalendar(username, options = {}) {
-  const range = getDefaultDateRange();
-  const from = normalizeDate(options.from, range.from);
-  const to = normalizeDate(options.to, range.to);
+const MAX_CONTRIBUTION_CHUNK_DAYS = 364;
 
+function addUtcDays(date, days) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function buildDateChunks(from, to) {
+  const chunks = [];
+  let start = new Date(from);
+  const end = new Date(to);
+
+  while (start <= end) {
+    let chunkEnd = addUtcDays(start, MAX_CONTRIBUTION_CHUNK_DAYS - 1);
+    if (chunkEnd > end) {
+      chunkEnd = new Date(end);
+    }
+
+    chunks.push({ from: new Date(start), to: new Date(chunkEnd) });
+    start = addUtcDays(chunkEnd, 1);
+  }
+
+  return chunks;
+}
+
+function mergeContributionCalendars(calendars) {
+  const dayMap = new Map();
+
+  for (const calendar of calendars) {
+    for (const week of calendar.weeks) {
+      for (const day of week.contributionDays) {
+        dayMap.set(day.date, day.contributionCount);
+      }
+    }
+  }
+
+  const sortedDates = [...dayMap.keys()].sort();
+  if (!sortedDates.length) {
+    return { totalContributions: 0, weeks: [] };
+  }
+
+  const start = new Date(`${sortedDates[0]}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+
+  const end = new Date(`${sortedDates.at(-1)}T00:00:00.000Z`);
+  const weeks = [];
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const contributionDays = [];
+
+    for (let index = 0; index < 7; index += 1) {
+      const date = cursor.toISOString().slice(0, 10);
+      contributionDays.push({
+        date,
+        contributionCount: dayMap.get(date) || 0
+      });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    weeks.push({ contributionDays });
+  }
+
+  const totalContributions = [...dayMap.values()].reduce((sum, count) => sum + count, 0);
+
+  return { totalContributions, weeks };
+}
+
+async function fetchContributionCalendarChunk(username, from, to) {
   const query = `
     query ContributionCalendar($login: String!, $from: DateTime!, $to: DateTime!) {
       user(login: $login) {
@@ -72,11 +152,30 @@ async function fetchContributionCalendar(username, options = {}) {
     throw error;
   }
 
-  const calendar = user.contributionsCollection.contributionCalendar;
-
   return {
     username: user.login,
     name: user.name,
+    calendar: user.contributionsCollection.contributionCalendar
+  };
+}
+
+async function fetchContributionCalendar(username, options = {}) {
+  const range = getDefaultDateRange();
+  const from = await resolveFromDate(username, options.from, range.from);
+  const to = normalizeDate(options.to, range.to);
+  const chunks = buildDateChunks(from, to);
+  const chunkResults = await Promise.all(
+    chunks.map((chunk) => fetchContributionCalendarChunk(username, chunk.from, chunk.to))
+  );
+  const profile = chunkResults[0];
+  const calendar =
+    chunks.length === 1
+      ? profile.calendar
+      : mergeContributionCalendars(chunkResults.map((result) => result.calendar));
+
+  return {
+    username: profile.username,
+    name: profile.name,
     calendar,
     from,
     to,

@@ -78,15 +78,25 @@ function clampCustomText(value) {
     .slice(0, CUSTOM_TEXT_MAX_LENGTH);
 }
 
-function buildCardUrl({ username, elements, theme, from, to, cardCopy }) {
+const datePresets = [
+  { id: "joined", label: "Since joined" },
+  { id: "year", label: "This year" },
+  { id: "custom", label: "Custom" }
+];
+
+function buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy }) {
   const params = new URLSearchParams({
     username: username.trim(),
     theme,
     elements: elements.join(",")
   });
 
-  if (from) params.set("from", from);
-  if (to) params.set("to", to);
+  if (datePreset === "joined") {
+    params.set("from", "joined");
+  } else if (datePreset === "custom") {
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+  }
   if (cardCopy.title.trim()) params.set("title", clampCustomText(cardCopy.title).trim());
   if (cardCopy.subtitle.trim()) params.set("subtitle", clampCustomText(cardCopy.subtitle).trim());
   if (cardCopy.badge.trim() && cardCopy.badge.trim() !== defaultCardCopy.badge) {
@@ -277,6 +287,7 @@ function Input({ label, value, placeholder, onChange, type = "text", maxLength }
 function BuilderApp() {
   const [username, setUsername] = useState("Ash310u");
   const [theme, setTheme] = useState("github_dark");
+  const [datePreset, setDatePreset] = useState("joined");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [elements, setElements] = useState([...defaultElements]);
@@ -312,8 +323,11 @@ function BuilderApp() {
   }, [query]);
 
   const cardUrl = useMemo(
-    () => (elements.length && username.trim() ? buildCardUrl({ username, elements, theme, from, to, cardCopy }) : ""),
-    [username, elements, theme, from, to, cardCopy]
+    () =>
+      elements.length && username.trim()
+        ? buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy })
+        : "",
+    [username, elements, theme, datePreset, from, to, cardCopy]
   );
   const markdown = cardUrl ? `![github stats](${cardUrl})` : "";
 
@@ -451,9 +465,40 @@ function BuilderApp() {
       showDates &&
         h(
           "div",
-          { className: "toolbar-extra" },
-          h(Input, { label: "From", type: "date", value: from, onChange: setFrom }),
-          h(Input, { label: "To", type: "date", value: to, onChange: setTo })
+          { className: "toolbar-extra date-range-extra" },
+          h(
+            "div",
+            { className: "input-field" },
+            h("span", { className: "input-label" }, "Stats period"),
+            h(
+              "div",
+              { className: "date-preset-switch", role: "group", "aria-label": "Stats period" },
+              datePresets.map((item) =>
+                h(
+                  "button",
+                  {
+                    key: item.id,
+                    type: "button",
+                    className: datePreset === item.id ? "active" : "",
+                    onClick: () => setDatePreset(item.id)
+                  },
+                  item.label
+                )
+              )
+            )
+          ),
+          datePreset === "custom" &&
+            h(Input, { label: "From", type: "date", value: from, onChange: setFrom }),
+          datePreset === "custom" &&
+            h(Input, { label: "To", type: "date", value: to, onChange: setTo }),
+          datePreset === "joined" &&
+            h(
+              "p",
+              { className: "date-range-hint" },
+              "Shows contribution stats from the year you joined GitHub through today."
+            ),
+          datePreset === "year" &&
+            h("p", { className: "date-range-hint" }, "Shows contribution stats for the current calendar year.")
         ),
       showHeaderEdit &&
         h(

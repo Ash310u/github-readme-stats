@@ -428,6 +428,41 @@ button {
   color: white;
 }
 
+.date-preset-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 42px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.date-preset-switch button {
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.date-preset-switch button.active {
+  background: var(--accent);
+  color: white;
+}
+
+.date-range-extra {
+  align-items: start;
+}
+
+.date-range-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;
