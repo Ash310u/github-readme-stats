@@ -6,7 +6,7 @@ const REPO_URL = "https://github.com/Ash310u/github-readme-stats";
 const REPO_STARS_API = "/api/repo/stars";
 const STAR_INTRO_PEAK = 79000;
 const STAR_RUSH_END = 99;
-const STAR_CRAWL_END = 100;
+const STAR_CRAWL_END = 11;
 const STAR_FRAME_BUDGET_MS = 16;
 
 function formatStarLabel(value) {
@@ -117,9 +117,9 @@ export const creator = {
     "Since then, one belief has stayed the same: if I don't know how something works, I'll figure it out. That mindset has led me to learn, build, experiment, and ship ideas that started as simple questions."
   ],
   links: [
-    { label: "GitHub", href: "https://github.com/Ash310u", icon: "github" },
-    { label: "Twitter / X", href: "https://x.com/Ash310u", icon: "x" },
-    { label: "Email", href: "mailto:hello@ash310u.dev", icon: "mail" }
+    { label: "GitHub", href: "https://github.com/ash310u", icon: "github" },
+    { label: "Twitter / X", href: "https://x.com/devdotashu", icon: "x" },
+    { label: "Email", href: "mailto:dev.ash310u@gmail.com", icon: "mail" }
   ]
 };
 
@@ -196,14 +196,14 @@ function GitHubStarButton() {
                 onComplete: () => {
                   setLabel(formatStarLabel(STAR_INTRO_PEAK));
 
-                  schedule(180, () => {
+                  schedule(420, () => {
                     setPhase("intro-pop");
                     setLabel("");
 
-                    schedule(35, () => {
+                    schedule(80, () => {
                       setLabel(formatStarLabel(real));
 
-                      schedule(320, () => {
+                      schedule(720, () => {
                         setPhase("idle");
                       });
                     });
@@ -326,7 +326,7 @@ export function SiteFooter() {
       " by ",
       h(
         "a",
-        { href: "https://github.com/Ash310u", target: "_blank", rel: "noreferrer" },
+        { href: "https://github.com/ash310u", target: "_blank", rel: "noreferrer" },
         "@ash310u"
       )
     ),
