@@ -17,6 +17,23 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div id="app-skeleton" class="app-skeleton" aria-hidden="true">
+      <div class="skeleton-nav">
+        <span class="skeleton-line skeleton-line--brand"></span>
+        <span class="skeleton-line skeleton-line--nav"></span>
+      </div>
+      <div class="skeleton-dashboard">
+        <div class="skeleton-card skeleton-toolbar">
+          <span class="skeleton-line skeleton-line--input"></span>
+          <span class="skeleton-pill"></span>
+        </div>
+        <div class="skeleton-card skeleton-preview">
+          <span class="skeleton-line skeleton-line--title"></span>
+          <div class="skeleton-preview-stage"></div>
+          <span class="skeleton-line skeleton-line--button"></span>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/app.js"></script>
   </body>

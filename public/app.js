@@ -64,6 +64,26 @@ const defaultElements = ["stars", "commits", "prs", "issues", "contributed", "he
 const PREVIEW_DEBOUNCE_MS = 600;
 const PREVIEW_MAX_RETRIES = 3;
 const PREVIEW_RETRY_DELAYS = [1200, 2400, 4000];
+const MOBILE_BREAKPOINT = 768;
+
+const mobileTabs = [
+  { id: "preview", label: "Preview", short: "Preview" },
+  { id: "order", label: "Order", short: "Order" },
+  { id: "elements", label: "Elements", short: "Add" }
+];
+
+function useIsMobile(breakpoint = MOBILE_BREAKPOINT) {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${breakpoint}px)`).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const onChange = () => setIsMobile(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [breakpoint]);
+
+  return isMobile;
+}
 
 function moveItem(items, fromIndex, toIndex) {
   const next = [...items];
@@ -285,6 +305,7 @@ function Input({ label, value, placeholder, onChange, type = "text", maxLength }
 }
 
 function BuilderApp() {
+  const isMobile = useIsMobile();
   const [username, setUsername] = useState("Ash310u");
   const [theme, setTheme] = useState("github_dark");
   const [datePreset, setDatePreset] = useState("joined");
@@ -295,10 +316,19 @@ function BuilderApp() {
   const [query, setQuery] = useState("");
   const [showDates, setShowDates] = useState(false);
   const [showHeaderEdit, setShowHeaderEdit] = useState(false);
+  const [toolbarOpen, setToolbarOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState("preview");
+  const [mounted, setMounted] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [copied, setCopied] = useState("");
   const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMounted(true));
+    document.getElementById("app-skeleton")?.remove();
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const ordered = useMemo(
     () => elements.map((id) => catalog.find((item) => item.id === id)).filter(Boolean),
@@ -410,58 +440,263 @@ function BuilderApp() {
     });
   }
 
-  return h(
-    "div",
-    { className: "dashboard" },
+  function panelClass(id) {
+    const classes = ["dashboard-panel", "card"];
+    if (id === "preview") classes.push("preview-panel");
+    if (isMobile) classes.push(mobileTab === id ? "is-active" : "is-hidden");
+    return classes.join(" ");
+  }
+
+  const toolbarClass = [
+    "dashboard-toolbar",
+    "card",
+    isMobile ? "dashboard-toolbar--mobile" : "",
+    isMobile && toolbarOpen ? "is-open" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const orderPanel = h(
+    "section",
+    { className: panelClass("order"), "data-panel": "order" },
     h(
-      "section",
-      { className: "dashboard-toolbar card" },
-      h(Input, {
-        label: "GitHub username",
-        value: username,
-        placeholder: "e.g. Ash310u",
-        onChange: setUsername
-      }),
-      h(
-        "div",
-        { className: "input-field" },
-        h("span", { className: "input-label" }, "Theme"),
-        h(
-          "div",
-          { className: "theme-switch", role: "group", "aria-label": "Theme" },
-          themes.map((item) =>
+      "div",
+      { className: "panel-head" },
+      h("h2", null, "Order"),
+      h("span", { className: "badge" }, `${ordered.length}`)
+    ),
+    h(
+      "div",
+      {
+        className: draggedId ? "panel-body order-list dragging" : "panel-body order-list",
+        onDragOver: onListDragOver,
+        onDrop: (event) => onDrop(event, ordered.length)
+      },
+      ordered.length
+        ? ordered.map((item, index) =>
             h(
-              "button",
-              {
-                key: item.id,
-                type: "button",
-                className: theme === item.id ? "active" : "",
-                onClick: () => setTheme(item.id)
-              },
-              item.label
+              Fragment,
+              { key: item.id },
+              dropIndex === index && h("div", { className: "drop-indicator", "aria-hidden": true }),
+              h(
+                "div",
+                {
+                  className: draggedId === item.id ? "order-row is-dragging" : "order-row",
+                  onDragOver: (event) => onRowDragOver(event, index),
+                  onDrop: (event) => onDrop(event, dropIndex ?? index)
+                },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "drag-btn",
+                    "aria-label": `Drag ${item.label}`,
+                    draggable: true,
+                    onDragStart: (event) => onDragStart(event, item.id),
+                    onDragEnd: endDrag
+                  },
+                  h(
+                    "svg",
+                    { viewBox: "0 0 20 20", width: 16, height: 16, "aria-hidden": true },
+                    h("path", {
+                      d: "M7 4h2v2H7V4zm4 0h2v2h-2V4zM7 8h2v2H7V8zm4 0h2v2h-2V8zM7 12h2v2H7v-2zm4 0h2v2h-2v-2z",
+                      fill: "currentColor"
+                    })
+                  )
+                ),
+                h("span", { className: "order-rank" }, index + 1),
+                h("div", { className: "order-meta" }, h("strong", null, item.label), h("span", null, item.group)),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "icon-btn danger",
+                    "aria-label": `Remove ${item.label}`,
+                    onClick: () => removeElement(item.id)
+                  },
+                  "×"
+                )
+              )
             )
           )
-        )
+        : h(
+            "div",
+            {
+              className: "empty",
+              onDragOver: (event) => {
+                event.preventDefault();
+                setDropIndex(0);
+              },
+              onDrop: (event) => onDrop(event, 0)
+            },
+            h("p", null, "No items yet. Add stats or charts in Elements.")
+          ),
+      dropIndex === ordered.length && ordered.length > 0 && h("div", { className: "drop-indicator", "aria-hidden": true })
+    )
+  );
+
+  const elementsPanel = h(
+    "section",
+    { className: panelClass("elements"), "data-panel": "elements" },
+    h(
+      "div",
+      { className: "panel-head" },
+      h("h2", null, "Elements"),
+      h("input", {
+        className: "search",
+        type: "search",
+        value: query,
+        placeholder: "Search…",
+        onChange: (event) => setQuery(event.target.value)
+      })
+    ),
+    h(
+      "div",
+      { className: "panel-body" },
+      filteredGroups.length
+        ? filteredGroups.map((group) =>
+            h(
+              "div",
+              { key: group.id, className: "catalog-group" },
+              h("h3", null, group.label),
+              h(
+                "div",
+                { className: "catalog-grid" },
+                group.elements.map((element) => {
+                  const active = elements.includes(element.id);
+                  return h(
+                    "button",
+                    {
+                      key: element.id,
+                      type: "button",
+                      className: active ? "catalog-card active" : "catalog-card",
+                      onClick: () => toggleElement(element.id),
+                      onDragStart: (event) => onDragStart(event, element.id),
+                      onDragEnd: endDrag,
+                      draggable: true
+                    },
+                    h("span", { className: "catalog-check" }, active ? "✓" : "+"),
+                    h("strong", null, element.label),
+                    h("small", null, element.desc)
+                  );
+                })
+              )
+            )
+          )
+        : h("div", { className: "empty compact" }, h("p", null, "No elements match your search."))
+    )
+  );
+
+  const previewPanel = h(
+    "aside",
+    { className: panelClass("preview"), "data-panel": "preview" },
+    h(
+      "div",
+      { className: "panel-head" },
+      h("div", { className: "panel-title-wrap" }, h("h2", null, "Preview"), isMobile && h("p", { className: "panel-subtitle" }, "Live card for your README")),
+      h("span", { className: "badge live" }, "Live")
+    ),
+    h(
+      "div",
+      { className: "panel-body preview-body" },
+      h(PreviewPanel, { username, elements, cardUrl, theme }),
+      h(
+        "button",
+        {
+          type: "button",
+          className: "primary-btn",
+          disabled: !markdown,
+          onClick: () => copy(markdown, "markdown")
+        },
+        copied === "markdown" ? "Copied!" : "Copy for README"
       ),
       h(
-        "div",
-        { className: "toolbar-actions" },
-        h(
-          "button",
-          { type: "button", className: "ghost-btn", onClick: () => setShowDates((open) => !open) },
-          showDates ? "Hide dates" : "Date range"
-        ),
-        h(
-          "button",
-          { type: "button", className: "ghost-btn", onClick: () => setShowHeaderEdit((open) => !open) },
-          showHeaderEdit ? "Hide header text" : "Edit header"
-        ),
-        h(
-          "button",
-          { type: "button", className: "ghost-btn", onClick: () => setElements([...defaultElements]) },
-          "Reset card"
-        )
+        "button",
+        {
+          type: "button",
+          className: "secondary-btn",
+          disabled: !cardUrl,
+          onClick: () => copy(cardUrl, "url")
+        },
+        copied === "url" ? "URL copied" : "Copy image URL"
       ),
+      cardUrl &&
+        h("details", { className: "url-details" }, h("summary", null, "View URL"), h("code", null, cardUrl))
+    )
+  );
+
+  return h(
+    "div",
+    { className: mounted ? "dashboard dashboard--ready" : "dashboard" },
+    h(
+      "section",
+      { className: toolbarClass },
+      h(
+        "div",
+        { className: "toolbar-main" },
+        h(Input, {
+          label: "GitHub username",
+          value: username,
+          placeholder: "e.g. Ash310u",
+          onChange: setUsername
+        }),
+        h(
+          "div",
+          { className: "input-field toolbar-theme" },
+          h("span", { className: "input-label" }, "Theme"),
+          h(
+            "div",
+            { className: "theme-switch", role: "group", "aria-label": "Theme" },
+            themes.map((item) =>
+              h(
+                "button",
+                {
+                  key: item.id,
+                  type: "button",
+                  className: theme === item.id ? "active" : "",
+                  onClick: () => setTheme(item.id)
+                },
+                item.label
+              )
+            )
+          )
+        ),
+        isMobile &&
+          h(
+            "button",
+            {
+              type: "button",
+              className: "ghost-btn toolbar-toggle",
+              "aria-expanded": toolbarOpen,
+              onClick: () => setToolbarOpen((open) => !open)
+            },
+            toolbarOpen ? "Less" : "Options"
+          )
+      ),
+      (!isMobile || toolbarOpen) &&
+        h(
+          "div",
+          { className: "toolbar-details" },
+          h(
+            "div",
+            { className: "toolbar-actions" },
+            h(
+              "button",
+              { type: "button", className: "ghost-btn", onClick: () => setShowDates((open) => !open) },
+              showDates ? "Hide dates" : "Date range"
+            ),
+            h(
+              "button",
+              { type: "button", className: "ghost-btn", onClick: () => setShowHeaderEdit((open) => !open) },
+              showHeaderEdit ? "Hide header text" : "Edit header"
+            ),
+            h(
+              "button",
+              { type: "button", className: "ghost-btn", onClick: () => setElements([...defaultElements]) },
+              "Reset card"
+            )
+          )
+        ),
       showDates &&
         h(
           "div",
@@ -529,168 +764,29 @@ function BuilderApp() {
     ),
     h(
       "div",
-      { className: "dashboard-grid" },
-      h(
-        "section",
-        { className: "dashboard-panel card" },
-        h(
-          "div",
-          { className: "panel-head" },
-          h("h2", null, "Order"),
-          h("span", { className: "badge" }, `${ordered.length}`)
-        ),
-        h(
-          "div",
-          {
-            className: draggedId ? "panel-body order-list dragging" : "panel-body order-list",
-            onDragOver: onListDragOver,
-            onDrop: (event) => onDrop(event, ordered.length)
-          },
-            ordered.length
-              ? ordered.map((item, index) =>
-                  h(
-                    Fragment,
-                    { key: item.id },
-                    dropIndex === index &&
-                      h("div", { className: "drop-indicator", "aria-hidden": true }),
-                    h(
-                      "div",
-                      {
-                        className: draggedId === item.id ? "order-row is-dragging" : "order-row",
-                        onDragOver: (event) => onRowDragOver(event, index),
-                        onDrop: (event) => onDrop(event, dropIndex ?? index)
-                      },
-                      h(
-                        "button",
-                        {
-                          type: "button",
-                          className: "drag-btn",
-                          "aria-label": `Drag ${item.label}`,
-                          draggable: true,
-                          onDragStart: (event) => onDragStart(event, item.id),
-                          onDragEnd: endDrag
-                        },
-                        h("svg", { viewBox: "0 0 20 20", width: 16, height: 16, "aria-hidden": true }, h("path", { d: "M7 4h2v2H7V4zm4 0h2v2h-2V4zM7 8h2v2H7V8zm4 0h2v2h-2V8zM7 12h2v2H7v-2zm4 0h2v2h-2v-2z", fill: "currentColor" }))
-                      ),
-                      h("span", { className: "order-rank" }, index + 1),
-                      h(
-                        "div",
-                        { className: "order-meta" },
-                        h("strong", null, item.label),
-                        h("span", null, item.group)
-                      ),
-                      h(
-                        "button",
-                        {
-                          type: "button",
-                          className: "icon-btn danger",
-                          "aria-label": `Remove ${item.label}`,
-                          onClick: () => removeElement(item.id)
-                        },
-                        "×"
-                      )
-                    )
-                  )
-                )
-              : h(
-                  "div",
-                  {
-                    className: "empty",
-                    onDragOver: (event) => {
-                      event.preventDefault();
-                      setDropIndex(0);
-                    },
-                    onDrop: (event) => onDrop(event, 0)
-                  },
-                  h("p", null, "No items yet. Add stats or charts below.")
-                ),
-            dropIndex === ordered.length && ordered.length > 0 && h("div", { className: "drop-indicator", "aria-hidden": true })
-        )
-      ),
-      h(
-        "section",
-        { className: "dashboard-panel card" },
-        h(
-          "div",
-          { className: "panel-head" },
-          h("h2", null, "Elements"),
-          h("input", {
-            className: "search",
-            type: "search",
-            value: query,
-            placeholder: "Search…",
-            onChange: (event) => setQuery(event.target.value)
-          })
-        ),
-        h(
-          "div",
-          { className: "panel-body" },
-          filteredGroups.length
-            ? filteredGroups.map((group) =>
-                h(
-                  "div",
-                  { key: group.id, className: "catalog-group" },
-                  h("h3", null, group.label),
-                  h(
-                    "div",
-                    { className: "catalog-grid" },
-                    group.elements.map((element) => {
-                      const active = elements.includes(element.id);
-                      return h(
-                        "button",
-                        {
-                          key: element.id,
-                          type: "button",
-                          className: active ? "catalog-card active" : "catalog-card",
-                          onClick: () => toggleElement(element.id),
-                          onDragStart: (event) => onDragStart(event, element.id),
-                          onDragEnd: endDrag,
-                          draggable: true
-                        },
-                        h("span", { className: "catalog-check" }, active ? "✓" : "+"),
-                        h("strong", null, element.label),
-                        h("small", null, element.desc)
-                      );
-                    })
-                  )
-                )
-              )
-            : h("div", { className: "empty compact" }, h("p", null, "No elements match your search."))
-        )
-      ),
-      h(
-        "aside",
-        { className: "dashboard-panel card preview-panel" },
-        h("div", { className: "panel-head" }, h("h2", null, "Preview"), h("span", { className: "badge live" }, "Live")),
-        h(
-          "div",
-          { className: "panel-body preview-body" },
-          h(PreviewPanel, { username, elements, cardUrl, theme }),
-          h(
-            "button",
-            {
-              type: "button",
-              className: "primary-btn",
-              disabled: !markdown,
-              onClick: () => copy(markdown, "markdown")
-            },
-            copied === "markdown" ? "Copied!" : "Copy for README"
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              className: "secondary-btn",
-              disabled: !cardUrl,
-              onClick: () => copy(cardUrl, "url")
-            },
-            copied === "url" ? "URL copied" : "Copy image URL"
-          ),
-          cardUrl &&
-            h("details", { className: "url-details" }, h("summary", null, "View URL"), h("code", null, cardUrl))
-        )
-      )
+      { className: "dashboard-workspace" },
+      h("div", { className: "dashboard-grid" }, orderPanel, elementsPanel, previewPanel)
     ),
+    isMobile &&
+      h(
+        "nav",
+        { className: "mobile-tabbar", "aria-label": "Dashboard sections" },
+        mobileTabs.map((tab) =>
+          h(
+            "button",
+            {
+              key: tab.id,
+              type: "button",
+              className: mobileTab === tab.id ? "mobile-tab active" : "mobile-tab",
+              "aria-current": mobileTab === tab.id ? "page" : undefined,
+              onClick: () => setMobileTab(tab.id)
+            },
+            h("span", { className: "mobile-tab-label" }, tab.short),
+            tab.id === "order" && h("span", { className: "mobile-tab-badge" }, `${ordered.length}`),
+            tab.id === "elements" && h("span", { className: "mobile-tab-badge" }, `${elements.length}`)
+          )
+        )
+      ),
     toast &&
       h(
         "div",
