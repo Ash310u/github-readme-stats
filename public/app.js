@@ -4,18 +4,18 @@ import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 const h = React.createElement;
 
 const availableWidgets = [
-  { id: "stats", label: "Summary", short: "Totals" },
-  { id: "heatmap", label: "Heatmap", short: "Contributions" },
-  { id: "weekly", label: "Weekly", short: "Bars" },
-  { id: "chart", label: "Streaks", short: "Contribution stats" },
-  { id: "languages", label: "Languages", short: "Top repos" },
-  { id: "repos", label: "Repos", short: "Repository stats" },
-  { id: "activity", label: "Activity", short: "Commits, PRs, issues" }
+  { id: "stats", label: "summary", short: "totals" },
+  { id: "heatmap", label: "heatmap", short: "contributions" },
+  { id: "weekly", label: "weekly", short: "bars" },
+  { id: "chart", label: "streaks", short: "contribution stats" },
+  { id: "languages", label: "languages", short: "top repos" },
+  { id: "repos", label: "repos", short: "repository stats" },
+  { id: "activity", label: "activity", short: "commits, PRs, issues" }
 ];
 
 const themes = [
-  { id: "github_dark", label: "Dark" },
-  { id: "github_light", label: "Light" }
+  { id: "github_dark", label: "dark" },
+  { id: "github_light", label: "light" }
 ];
 
 function moveItem(items, fromIndex, toIndex) {
@@ -46,6 +46,7 @@ function BuilderApp() {
   const [widgets, setWidgets] = useState(["stats", "heatmap", "weekly"]);
   const [dragged, setDragged] = useState(null);
   const [copied, setCopied] = useState("");
+  const [toast, setToast] = useState(null);
 
   const selectedWidgets = useMemo(
     () => widgets.map((id) => availableWidgets.find((widget) => widget.id === id)).filter(Boolean),
@@ -56,7 +57,7 @@ function BuilderApp() {
     () => buildCardUrl({ username, widgets, theme, from, to }),
     [username, widgets, theme, from, to]
   );
-  const markdown = `![GitHub Stats](${cardUrl})`;
+  const markdown = `![github stats](${cardUrl})`;
 
   function addWidget(id) {
     if (!widgets.includes(id)) {
@@ -64,9 +65,44 @@ function BuilderApp() {
     }
   }
 
-  function removeWidget(id) {
+  function removeWidget(id, showUndo = true) {
+    const removedIndex = widgets.indexOf(id);
     const next = widgets.filter((widget) => widget !== id);
-    setWidgets(next.length ? next : ["stats"]);
+    setWidgets(next);
+
+    if (showUndo && removedIndex >= 0) {
+      const removedWidget = availableWidgets.find((widget) => widget.id === id);
+      setToast({ id, index: removedIndex, label: removedWidget?.label || id });
+      window.setTimeout(() => {
+        setToast((current) => (current?.id === id ? null : current));
+      }, 5000);
+    }
+  }
+
+  function toggleWidget(id) {
+    if (widgets.includes(id)) {
+      removeWidget(id);
+      return;
+    }
+
+    addWidget(id);
+  }
+
+  function undoRemove() {
+    if (!toast) {
+      return;
+    }
+
+    setWidgets((current) => {
+      if (current.includes(toast.id)) {
+        return current;
+      }
+
+      const next = [...current];
+      next.splice(Math.min(toast.index, next.length), 0, toast.id);
+      return next;
+    });
+    setToast(null);
   }
 
   function copy(value, label) {
@@ -113,13 +149,13 @@ function BuilderApp() {
       h(
         "div",
         { className: "brand-block" },
-        h("p", { className: "eyebrow" }, "GitHub Stats Builder"),
-        h("h1", null, "Custom Profile Card")
+        h("p", { className: "eyebrow" }, "github stats builder"),
+        h("h1", null, "custom profile card")
       ),
       h(
         "label",
         { className: "field" },
-        h("span", null, "Username"),
+        h("span", null, "username"),
         h("input", {
           value: username,
           onChange: (event) => setUsername(event.target.value),
@@ -129,7 +165,7 @@ function BuilderApp() {
       ),
       h(
         "div",
-        { className: "segmented", role: "group", "aria-label": "Theme" },
+        { className: "segmented", role: "group", "aria-label": "theme" },
         themes.map((item) =>
           h(
             "button",
@@ -146,7 +182,7 @@ function BuilderApp() {
       h(
         "label",
         { className: "field compact" },
-        h("span", null, "From"),
+        h("span", null, "from"),
         h("input", {
           type: "date",
           value: from,
@@ -156,7 +192,7 @@ function BuilderApp() {
       h(
         "label",
         { className: "field compact" },
-        h("span", null, "To"),
+        h("span", null, "to"),
         h("input", {
           type: "date",
           value: to,
@@ -170,7 +206,7 @@ function BuilderApp() {
       h(
         "aside",
         { className: "palette" },
-        h("h2", null, "Elements"),
+        h("h2", null, "elements"),
         h(
           "div",
           { className: "palette-list" },
@@ -180,9 +216,10 @@ function BuilderApp() {
               {
                 key: widget.id,
                 type: "button",
-                className: widgets.includes(widget.id) ? "palette-item is-used" : "palette-item",
+                className: widgets.includes(widget.id) ? "palette-item is-selected" : "palette-item",
+                "aria-pressed": widgets.includes(widget.id),
                 draggable: true,
-                onClick: () => addWidget(widget.id),
+                onClick: () => toggleWidget(widget.id),
                 onDragStart: (event) => {
                   const value = `palette:${widget.id}`;
                   setDragged(value);
@@ -190,8 +227,8 @@ function BuilderApp() {
                 },
                 onDragEnd: () => setDragged(null)
               },
-              h("span", null, widget.label),
-              h("small", null, widget.short)
+              h("span", { className: "selection-dot", "aria-hidden": true }),
+              h("span", { className: "palette-copy" }, h("strong", null, widget.label), h("small", null, widget.short))
             )
           )
         )
@@ -210,48 +247,51 @@ function BuilderApp() {
             "div",
             { className: "canvas-head" },
             h("div", null, h("strong", null, username || "username"), h("span", null, "custom card")),
-            h("span", null, `${selectedWidgets.length} elements`)
+            h("code", null, `${selectedWidgets.length} elements`)
           ),
           h(
             "div",
             { className: "drop-stack" },
-            selectedWidgets.map((widget, index) =>
-              h(
-                "div",
-                {
-                  key: widget.id,
-                  className: "drop-row",
-                  draggable: true,
-                  onDragStart: (event) => {
-                    const value = `canvas:${widget.id}`;
-                    setDragged(value);
-                    event.dataTransfer.setData("text/plain", value);
-                  },
-                  onDragEnd: () => setDragged(null),
-                  onDragOver: (event) => event.preventDefault(),
-                  onDrop: (event) => onDropCanvas(event, index)
-                },
-                h("span", { className: "grab" }, "::"),
-                h("div", null, h("strong", null, widget.label), h("small", null, widget.short)),
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "icon-button",
-                    "aria-label": `Remove ${widget.label}`,
-                    onClick: () => removeWidget(widget.id)
-                  },
-                  "x"
+            selectedWidgets.length
+              ? selectedWidgets.map((widget, index) =>
+                  h(
+                    "div",
+                    {
+                      key: widget.id,
+                      className: "drop-row",
+                      draggable: true,
+                      onDragStart: (event) => {
+                        const value = `canvas:${widget.id}`;
+                        setDragged(value);
+                        event.dataTransfer.setData("text/plain", value);
+                      },
+                      onDragEnd: () => setDragged(null),
+                      onDragOver: (event) => event.preventDefault(),
+                      onDrop: (event) => onDropCanvas(event, index)
+                    },
+                    h("span", { className: "thread-line", "aria-hidden": true }),
+                    h("span", { className: "grab", "aria-hidden": true }, "::"),
+                    h("div", { className: "drop-copy" }, h("strong", null, widget.label), h("small", null, widget.short)),
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "icon-button",
+                        "aria-label": `remove ${widget.label}`,
+                        onClick: () => removeWidget(widget.id)
+                      },
+                      "x"
+                    )
+                  )
                 )
-              )
-            )
+              : h("div", { className: "empty-canvas" }, "select elements from the left rail")
           )
         )
       ),
       h(
         "aside",
         { className: "output-panel" },
-        h("h2", null, "Preview"),
+        h("h2", null, "preview"),
         username.trim()
           ? h("img", { className: "svg-preview", src: cardUrl, alt: "Custom GitHub stats card preview" })
           : h("div", { className: "empty-preview" }),
@@ -261,16 +301,23 @@ function BuilderApp() {
           h(
             "button",
             { type: "button", onClick: () => copy(cardUrl, "URL") },
-            copied === "URL" ? "Copied URL" : "Copy URL"
+            copied === "URL" ? "copied url" : "copy url"
           ),
           h(
             "button",
             { type: "button", onClick: () => copy(markdown, "Markdown") },
-            copied === "Markdown" ? "Copied Markdown" : "Copy Markdown"
+            copied === "Markdown" ? "copied markdown" : "copy markdown"
           )
         ),
         h("textarea", { readOnly: true, value: markdown, rows: 5 })
-      )
+      ),
+      toast &&
+        h(
+          "div",
+          { className: "undo-toast", role: "status" },
+          h("span", null, `${toast.label} removed`),
+          h("button", { type: "button", onClick: undoRemove }, "undo")
+        )
     )
   );
 }

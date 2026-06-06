@@ -14,7 +14,7 @@ export const customWidgetDefinitions = {
 export const defaultCustomWidgets = ["stats", "heatmap", "weekly"];
 
 export function parseCustomWidgets(value) {
-  if (!value) {
+  if (value === null) {
     return defaultCustomWidgets;
   }
 
@@ -23,7 +23,7 @@ export function parseCustomWidgets(value) {
     .map((widget) => widget.trim())
     .filter((widget) => customWidgetDefinitions[widget]);
 
-  return widgets.length ? [...new Set(widgets)] : defaultCustomWidgets;
+  return [...new Set(widgets)];
 }
 
 function renderMetric(theme, { label, value, x, y, width = 150, accent = false }) {
