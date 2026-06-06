@@ -1,4 +1,4 @@
-import React, { Fragment, useMemo, useState } from "https://esm.sh/react@18.3.1";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 import { AboutPage, SiteFooter, SiteNav, usePath } from "./site.js";
 
@@ -61,6 +61,9 @@ const themes = [
 
 const defaultCardCopy = { title: "", subtitle: "", badge: "github-stats" };
 const defaultElements = ["stars", "commits", "prs", "issues", "contributed", "heatmap", "weekly"];
+const PREVIEW_DEBOUNCE_MS = 600;
+const PREVIEW_MAX_RETRIES = 3;
+const PREVIEW_RETRY_DELAYS = [1200, 2400, 4000];
 
 function moveItem(items, fromIndex, toIndex) {
   const next = [...items];
@@ -100,6 +103,161 @@ function insertAtIndex(list, id, targetIndex) {
   return next;
 }
 
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+function usePreviewLoader(cardUrl) {
+  const [displayUrl, setDisplayUrl] = useState("");
+  const [status, setStatus] = useState("idle");
+  const requestIdRef = useRef(0);
+  const displayUrlRef = useRef("");
+  const debouncedUrl = useDebouncedValue(cardUrl, PREVIEW_DEBOUNCE_MS);
+
+  useEffect(() => {
+    displayUrlRef.current = displayUrl;
+  }, [displayUrl]);
+
+  useEffect(() => {
+    if (!debouncedUrl) {
+      setDisplayUrl("");
+      setStatus("idle");
+      return;
+    }
+
+    const requestId = ++requestIdRef.current;
+    let cancelled = false;
+    let retryTimer;
+
+    function load(url, attempt) {
+      if (cancelled || requestId !== requestIdRef.current) return;
+
+      setStatus(displayUrlRef.current ? "refreshing" : "loading");
+
+      const image = new Image();
+      const cacheBustedUrl = attempt > 0 ? `${url}${url.includes("?") ? "&" : "?"}_retry=${Date.now()}` : url;
+
+      image.onload = () => {
+        if (cancelled || requestId !== requestIdRef.current) return;
+        setDisplayUrl(cacheBustedUrl);
+        setStatus("ready");
+      };
+
+      image.onerror = () => {
+        if (cancelled || requestId !== requestIdRef.current) return;
+
+        if (attempt < PREVIEW_MAX_RETRIES) {
+          retryTimer = window.setTimeout(() => load(url, attempt + 1), PREVIEW_RETRY_DELAYS[attempt] ?? 4000);
+          return;
+        }
+
+        setStatus(displayUrlRef.current ? "stale" : "error");
+      };
+
+      image.src = cacheBustedUrl;
+    }
+
+    load(debouncedUrl, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+    };
+  }, [debouncedUrl]);
+
+  function retry() {
+    if (!debouncedUrl) return;
+
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+    setStatus(displayUrlRef.current ? "refreshing" : "loading");
+
+    const image = new Image();
+    const retryUrl = `${debouncedUrl}${debouncedUrl.includes("?") ? "&" : "?"}_retry=${Date.now()}`;
+
+    image.onload = () => {
+      if (requestId !== requestIdRef.current) return;
+      setDisplayUrl(retryUrl);
+      setStatus("ready");
+    };
+
+    image.onerror = () => {
+      if (requestId !== requestIdRef.current) return;
+      setStatus(displayUrlRef.current ? "stale" : "error");
+    };
+
+    image.src = retryUrl;
+  }
+
+  return { displayUrl, status, retry, isLoading: status === "loading" || status === "refreshing" };
+}
+
+function PreviewPanel({ username, elements, cardUrl, theme }) {
+  const canPreview = Boolean(username.trim() && elements.length);
+  const { displayUrl, status, retry, isLoading } = usePreviewLoader(canPreview ? cardUrl : "");
+  const stageClass = `preview-stage ${theme === "github_light" ? "light" : ""}${isLoading ? " is-loading" : ""}`;
+
+  if (!username.trim()) {
+    return h("div", { className: stageClass }, h("div", { className: "empty compact" }, h("p", null, "Enter a username to preview.")));
+  }
+
+  if (!elements.length) {
+    return h("div", { className: stageClass }, h("div", { className: "empty compact" }, h("p", null, "Add at least one element.")));
+  }
+
+  const showImage = Boolean(displayUrl);
+  const showLoader = isLoading && !showImage;
+  const showRefreshing = isLoading && showImage;
+  const showError = status === "error";
+  const showStale = status === "stale";
+
+  return h(
+    "div",
+    { className: stageClass },
+    showLoader &&
+      h(
+        "div",
+        { className: "preview-loader", role: "status", "aria-live": "polite" },
+        h("div", { className: "preview-spinner", "aria-hidden": true }),
+        h("p", null, "Generating preview…")
+      ),
+    showImage &&
+      h("img", {
+        className: showRefreshing || showStale ? "preview-img is-dimmed" : "preview-img",
+        src: displayUrl,
+        alt: "GitHub stats card preview"
+      }),
+    showRefreshing &&
+      h(
+        "div",
+        { className: "preview-overlay", role: "status", "aria-live": "polite" },
+        h("div", { className: "preview-spinner", "aria-hidden": true }),
+        h("p", null, "Updating preview…")
+      ),
+    showError &&
+      h(
+        "div",
+        { className: "empty compact error preview-error" },
+        h("p", null, "Preview is taking longer than usual."),
+        h("button", { type: "button", className: "ghost-btn", onClick: retry }, "Try again")
+      ),
+    showStale &&
+      h(
+        "div",
+        { className: "preview-stale-banner", role: "status" },
+        h("span", null, "Could not refresh preview."),
+        h("button", { type: "button", className: "ghost-btn", onClick: retry }, "Retry")
+      )
+  );
+}
+
 function Input({ label, value, placeholder, onChange, type = "text", maxLength }) {
   return h(
     "label",
@@ -129,7 +287,6 @@ function BuilderApp() {
   const [draggedId, setDraggedId] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [copied, setCopied] = useState("");
-  const [previewError, setPreviewError] = useState(false);
   const [toast, setToast] = useState(null);
 
   const ordered = useMemo(
@@ -463,24 +620,7 @@ function BuilderApp() {
         h(
           "div",
           { className: "panel-body preview-body" },
-          h(
-            "div",
-            { className: `preview-stage ${theme === "github_light" ? "light" : ""}` },
-            !username.trim()
-              ? h("div", { className: "empty compact" }, h("p", null, "Enter a username to preview."))
-              : !elements.length
-                ? h("div", { className: "empty compact" }, h("p", null, "Add at least one element."))
-                : previewError
-                  ? h("div", { className: "empty compact error" }, h("p", null, "Could not load preview."))
-                  : h("img", {
-                      key: cardUrl,
-                      className: "preview-img",
-                      src: cardUrl,
-                      alt: "GitHub stats card preview",
-                      onLoad: () => setPreviewError(false),
-                      onError: () => setPreviewError(true)
-                    })
-          ),
+          h(PreviewPanel, { username, elements, cardUrl, theme }),
           h(
             "button",
             {
