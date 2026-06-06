@@ -4,8 +4,6 @@ A growing API for generating GitHub stats cards, contribution charts, and profil
 
 ![GitHub stats builder preview](./builder-preview.png)
 
-![About page preview](./about-preview.png)
-
 ![Custom GitHub stats card preview](./custom-card-preview.png)
 
 ## Use The API
