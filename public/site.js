@@ -6,7 +6,7 @@ const REPO_URL = "https://github.com/Ash310u/github-readme-stats";
 const REPO_STARS_API = "/api/repo/stars";
 const STAR_INTRO_PEAK = 79000;
 const STAR_RUSH_END = 99;
-const STAR_CRAWL_END = 11;
+const STAR_CRAWL_END = 99;
 const STAR_FRAME_BUDGET_MS = 16;
 
 function formatStarLabel(value) {

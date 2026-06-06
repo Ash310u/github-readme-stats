@@ -37,7 +37,7 @@ export const customElementDefinitions = {
   following: { label: "Following", type: "metric", source: "repos", valueKey: "following", displayLabel: "Following" },
   heatmap: { label: "Contribution Heatmap", type: "block", source: "heatmap", height: 142 },
   weekly: { label: "Weekly Contributions", type: "block", source: "weekly", height: 142 },
-  languages: { label: "Languages", type: "block", source: "languages", height: 150 },
+  languages: { label: "Languages", type: "block", source: "languages", height: 162 },
   activity: { label: "Activity", type: "block", source: "activity", height: 126 }
 };
 
@@ -56,6 +56,8 @@ export const defaultCustomElements = ["stars", "commits", "prs", "issues", "cont
 const METRIC_ROW_HEIGHT = 88;
 const METRIC_SLOT_WIDTH = 170;
 const METRICS_PER_ROW = 5;
+const SECTION_TOP_GAP = 20;
+const LANGUAGE_ROW_GAP = 26;
 const CUSTOM_CARD_FOOTER = "generated with ash310u stats";
 
 const defaultCardCopy = {
@@ -146,7 +148,7 @@ function calculateCardHeight(elements) {
       metricCount = 0;
     }
 
-    height += definition.height;
+    height += definition.height + SECTION_TOP_GAP;
   }
 
   if (metricCount > 0) {
@@ -202,8 +204,9 @@ class CustomCardRenderer extends BaseSvgRenderer {
         }
 
         const metricsMarkup = flushMetrics();
-        const blockMarkup = this.renderBlock(elementId, payload[definition.source], y);
-        y += definition.height;
+        const blockY = y + SECTION_TOP_GAP;
+        const blockMarkup = this.renderBlock(elementId, payload[definition.source], blockY);
+        y += definition.height + SECTION_TOP_GAP;
         return metricsMarkup + blockMarkup;
       })
       .join("");
@@ -309,7 +312,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
     const maxCount = Math.max(...stats.languages.map((language) => language.count), 1);
     const rows = stats.languages
       .map((language, index) => {
-        const rowY = y + 38 + index * 22;
+        const rowY = y + 38 + index * LANGUAGE_ROW_GAP;
         const width = Math.max((language.count / maxCount) * 420, 4);
         const color = this.theme.chart[index % this.theme.chart.length];
 
