@@ -4,6 +4,8 @@ A growing API for generating GitHub stats cards, contribution charts, and profil
 
 ![GitHub stats builder preview](./builder-preview.png)
 
+![About page preview](./about-preview.png)
+
 ![Custom GitHub stats card preview](./custom-card-preview.png)
 
 ## Use The API
@@ -36,16 +38,24 @@ Use a dark GitHub-style theme:
 ![GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&theme=github_dark)
 ```
 
-Build a custom dark card in the browser:
+Build a custom card in the browser:
 
 ```text
 https://api-github-readme-stats.vercel.app/
 ```
 
+The builder is a single-screen dashboard. Pick individual stats and charts, drag to reorder them, edit the card header, and copy a Markdown snippet or image URL. Visit `/about` for project and creator details.
+
 Or use the custom card endpoint directly:
 
 ```md
-![Custom GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&theme=github_dark&widgets=stats,heatmap,weekly)
+![Custom GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&theme=github_dark&elements=stars,commits,prs,issues,contributed,heatmap,weekly)
+```
+
+Customize the card header:
+
+```md
+![Custom GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&theme=github_dark&elements=stars,commits,prs,issues,contributed,heatmap,weekly&title=Half-Blood%20Prince&subtitle=%40Ash310u%20%C2%B7%20custom%20GitHub%20profile%20card&badge=github-stats)
 ```
 
 Get raw JSON instead of an SVG:
@@ -53,15 +63,17 @@ Get raw JSON instead of an SVG:
 ```text
 https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&format=json
 https://api-github-readme-stats.vercel.app/api/stats/chart?username=Ash310u&format=json
-https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&widgets=stats,heatmap,weekly&format=json
+https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&elements=stars,commits,prs,issues,contributed,heatmap,weekly&format=json
 ```
 
 ## Endpoints
 
 | Endpoint | Description |
 | --- | --- |
+| `/` | Browser builder for composing custom cards. |
+| `/about` | About page with creator details and a link back to the builder. |
 | `/api/stats` | Summary card with stars, commits, pull requests, issues, and repositories contributed to. |
-| `/api/stats/custom` | One combined SVG card made from selected draggable widgets in the builder. |
+| `/api/stats/custom` | One combined SVG card made from individually selected elements. |
 | `/api/stats/chart` | Contribution metrics with total contributions, current streak, and longest streak. |
 | `/api/stats/languages` | Horizontal bar chart of top programming languages by repository count. |
 | `/api/stats/repos` | Repository-focused card with forks, stars, followers, and following. |
@@ -77,9 +89,45 @@ https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&wid
 | `username` | Yes | none | Any GitHub username | The profile to show stats for. |
 | `theme` | No | `github_light` | `github_light`, `github_dark`, `light`, `dark` | Changes the SVG colors. |
 | `format` | No | `svg` | `svg`, `json` | Returns an image card or raw stats data. |
-| `widgets` | No | `stats,heatmap,weekly` | `stats`, `heatmap`, `weekly`, `chart`, `languages`, `repos`, `activity` | Comma-separated widget list for `/api/stats/custom`. |
+| `elements` | No | `stars,commits,prs,issues,contributed,heatmap,weekly` | See custom elements below | Comma-separated element list for `/api/stats/custom`. |
+| `title` | No | empty | Up to 60 characters | Custom card title shown in the header. |
+| `subtitle` | No | empty | Up to 60 characters | Custom subtitle shown below the title. |
+| `badge` | No | `github-stats` | Up to 60 characters | Badge text shown in the top-right corner. |
+| `widgets` | No | none | `stats`, `heatmap`, `weekly`, `chart`, `languages`, `repos`, `activity` | Legacy widget groups. Expands into `elements` when `elements` is omitted. |
 | `from` | No | Jan 1 of the current year | `YYYY-MM-DD` | Start date for contribution-based cards (`chart`, `heatmap`, `weekly`). |
 | `to` | No | Today | `YYYY-MM-DD` | End date for contribution-based cards (`chart`, `heatmap`, `weekly`). |
+
+### Custom Elements
+
+Use `elements` to pick individual stats and charts for `/api/stats/custom`:
+
+| Element | Type | Description |
+| --- | --- | --- |
+| `stars` | metric | Total stars across public repositories. |
+| `commits` | metric | Total commits authored by the user. |
+| `prs` | metric | Total pull requests opened by the user. |
+| `issues` | metric | Total issues opened by the user. |
+| `contributed` | metric | Repositories contributed to. |
+| `total_contributions` | metric | Total contributions in the selected date range. |
+| `current_streak` | metric | Current contribution streak. |
+| `longest_streak` | metric | Longest contribution streak. |
+| `public_repos` | metric | Public repository count. |
+| `forks` | metric | Total forks across public repositories. |
+| `repo_stars` | metric | Total stars across public repositories. |
+| `followers` | metric | Follower count. |
+| `following` | metric | Following count. |
+| `heatmap` | chart | GitHub-style contribution heatmap grid. |
+| `weekly` | chart | Weekly contribution bar chart. |
+| `languages` | chart | Top programming languages by repository count. |
+| `activity` | chart | Stacked bar chart of commits, pull requests, and issues. |
+
+Example:
+
+```text
+/api/stats/custom?username=Ash310u&theme=github_dark&elements=stars,prs,issues,heatmap
+```
+
+The card footer is fixed as `generated with ash310u stats` and is not customizable.
 
 ## Stats Shown
 
@@ -124,9 +172,11 @@ The weekly chart shows:
 
 The custom card builder shows:
 
-- A React drag-and-drop editor at `/`.
-- A black card canvas by default.
+- A React dashboard at `/` with order, element picker, and live preview columns.
+- Drag-and-drop reordering for selected elements.
+- Optional card header text and a date range picker.
 - A generated `/api/stats/custom` image URL and Markdown snippet for profile READMEs.
+- An About page at `/about` with creator details and social links.
 
 ## GitHub Token
 
@@ -163,6 +213,10 @@ src/
   services/        GitHub REST, GraphQL, and stats data logic
   utils/           Formatting and escaping helpers
   server.js        Node HTTP server entrypoint
+public/
+  app.js           Builder dashboard
+  site.js          Navigation, About page, and footer
+  styles.css       Shared site styles
 ```
 
 ## Run Locally
@@ -194,6 +248,8 @@ http://localhost:3000
 Try it locally:
 
 ```text
+http://localhost:3000/
+http://localhost:3000/about
 http://localhost:3000/api/stats?username=Ash310u
 http://localhost:3000/api/stats/chart?username=Ash310u
 http://localhost:3000/api/stats/languages?username=Ash310u
@@ -201,6 +257,7 @@ http://localhost:3000/api/stats/repos?username=Ash310u
 http://localhost:3000/api/stats/activity?username=Ash310u
 http://localhost:3000/api/stats/heatmap?username=Ash310u
 http://localhost:3000/api/stats/weekly?username=Ash310u
+http://localhost:3000/api/stats/custom?username=Ash310u&elements=stars,commits,prs,issues,contributed,heatmap,weekly
 ```
 
 If port `3000` is already busy, use another port:
