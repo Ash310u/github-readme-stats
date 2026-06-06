@@ -601,27 +601,35 @@ function BuilderApp() {
       { className: "panel-body preview-body" },
       h(PreviewPanel, { username, elements, cardUrl, theme }),
       h(
-        "button",
-        {
-          type: "button",
-          className: "primary-btn",
-          disabled: !markdown,
-          onClick: () => copy(markdown, "markdown")
-        },
-        copied === "markdown" ? "Copied!" : "Copy for README"
-      ),
-      h(
-        "button",
-        {
-          type: "button",
-          className: "secondary-btn",
-          disabled: !cardUrl,
-          onClick: () => copy(cardUrl, "url")
-        },
-        copied === "url" ? "URL copied" : "Copy image URL"
-      ),
-      cardUrl &&
-        h("details", { className: "url-details" }, h("summary", null, "View URL"), h("code", null, cardUrl))
+        "div",
+        { className: "preview-footer" },
+        h(
+          "div",
+          { className: "preview-actions" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "primary-btn",
+              disabled: !markdown,
+              onClick: () => copy(markdown, "markdown")
+            },
+            copied === "markdown" ? "Copied!" : "Copy for README"
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "secondary-btn",
+              disabled: !cardUrl,
+              onClick: () => copy(cardUrl, "url")
+            },
+            copied === "url" ? "URL copied" : "Copy image URL"
+          )
+        ),
+        cardUrl &&
+          h("details", { className: "url-details" }, h("summary", null, "View URL"), h("code", null, cardUrl))
+      )
     )
   );
 
