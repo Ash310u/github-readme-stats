@@ -1,4 +1,5 @@
 import { BaseSvgRenderer } from "./base-svg-renderer.js";
+import { parseMetricLabels, sanitizeCustomText } from "../utils/custom-text.js";
 import { escapeHtml, formatNumber } from "../utils/format.js";
 
 export const customWidgetDefinitions = {
@@ -11,7 +12,22 @@ export const customWidgetDefinitions = {
   activity: { label: "Activity", height: 126 }
 };
 
+export const customWidgetMetricKeys = {
+  stats: ["stars", "commits", "prs", "issues", "contributed"],
+  chart: ["total", "current_streak", "longest_streak"],
+  repos: ["public_repos", "forks", "stars", "followers", "following"],
+  activity: ["commits", "prs", "issues"]
+};
+
 export const defaultCustomWidgets = ["stats", "heatmap", "weekly"];
+
+const CUSTOM_CARD_FOOTER = "generated with ash310u stats";
+
+const defaultCardCopy = {
+  title: "",
+  subtitle: "",
+  badge: "github-stats"
+};
 
 export function parseCustomWidgets(value) {
   if (value === null) {
@@ -24,6 +40,28 @@ export function parseCustomWidgets(value) {
     .filter((widget) => customWidgetDefinitions[widget]);
 
   return [...new Set(widgets)];
+}
+
+export function parseCardCustomization(searchParams) {
+  const card = {
+    title: sanitizeCustomText(searchParams.get("title")),
+    subtitle: sanitizeCustomText(searchParams.get("subtitle")),
+    badge: sanitizeCustomText(searchParams.get("badge")) || defaultCardCopy.badge
+  };
+
+  const widgets = {};
+
+  for (const widgetId of Object.keys(customWidgetDefinitions)) {
+    const title = sanitizeCustomText(searchParams.get(`label_${widgetId}`));
+    const detail = sanitizeCustomText(searchParams.get(`detail_${widgetId}`));
+    const metrics = parseMetricLabels(searchParams.get(`metrics_${widgetId}`));
+
+    if (title || detail || Object.keys(metrics).length > 0) {
+      widgets[widgetId] = { title, detail, metrics };
+    }
+  }
+
+  return { card, widgets };
 }
 
 function renderMetric(theme, { label, value, x, y, width = 150, accent = false }) {
@@ -45,7 +83,7 @@ function getHeatmapLevel(count) {
 }
 
 class CustomCardRenderer extends BaseSvgRenderer {
-  constructor({ widgets, themeName }) {
+  constructor({ widgets, themeName, customization = { card: defaultCardCopy, widgets: {} } }) {
     const height =
       112 + widgets.reduce((sum, widget) => sum + customWidgetDefinitions[widget].height, 0) + 42;
 
@@ -57,12 +95,23 @@ class CustomCardRenderer extends BaseSvgRenderer {
     });
 
     this.widgets = widgets;
+    this.customization = customization;
     this.padding = 32;
+  }
+
+  widgetCopy(widgetId) {
+    return this.customization.widgets[widgetId] || { title: "", detail: "", metrics: {} };
+  }
+
+  metricLabel(widgetId, key, fallback) {
+    return this.widgetCopy(widgetId).metrics[key] || fallback;
   }
 
   render(payload) {
     const profile = payload.stats || payload.heatmap || payload.weekly || payload.chart;
-    const displayName = profile?.name || profile?.username || payload.username;
+    const displayName = this.customization.card.title || profile?.name || profile?.username || payload.username;
+    const defaultSubtitle = `@${profile?.username || payload.username} · custom GitHub profile card`;
+    const subtitle = this.customization.card.subtitle || defaultSubtitle;
     let y = 106;
 
     const sections = this.widgets
@@ -78,11 +127,11 @@ class CustomCardRenderer extends BaseSvgRenderer {
       description: `Custom GitHub stats card for ${profile?.username || payload.username}`,
       children: `
     <text x="${this.padding}" y="44" fill="${this.theme.title}" font-size="25" font-weight="800">${escapeHtml(displayName)}</text>
-    <text x="${this.padding}" y="70" fill="${this.theme.muted}" font-size="14">@${escapeHtml(profile?.username || payload.username)} · custom GitHub profile card</text>
-    <text x="${this.width - this.padding}" y="56" text-anchor="end" fill="${this.theme.accent}" font-size="13" font-weight="700">github-stats</text>
+    <text x="${this.padding}" y="70" fill="${this.theme.muted}" font-size="14">${escapeHtml(subtitle)}</text>
+    <text x="${this.width - this.padding}" y="56" text-anchor="end" fill="${this.theme.accent}" font-size="13" font-weight="700">${escapeHtml(this.customization.card.badge)}</text>
     <line x1="${this.padding}" y1="88" x2="${this.width - this.padding}" y2="88" stroke="${this.theme.border}"/>
     ${sections}
-    ${this.footer("generated with github-stats")}
+    ${this.footer(CUSTOM_CARD_FOOTER)}
   `
     });
   }
@@ -105,7 +154,11 @@ class CustomCardRenderer extends BaseSvgRenderer {
     return renderers[widget]();
   }
 
-  sectionTitle(label, y, detail = "") {
+  sectionTitle(widgetId, y, fallbackLabel, fallbackDetail = "") {
+    const copy = this.widgetCopy(widgetId);
+    const label = copy.title || fallbackLabel;
+    const detail = copy.detail || fallbackDetail;
+
     return `
     <text x="${this.padding}" y="${y}" fill="${this.theme.text}" font-size="15" font-weight="750">${escapeHtml(label)}</text>
     <text x="${this.width - this.padding}" y="${y}" text-anchor="end" fill="${this.theme.muted}" font-size="12">${escapeHtml(detail)}</text>`;
@@ -113,44 +166,44 @@ class CustomCardRenderer extends BaseSvgRenderer {
 
   emptySection(widget, y) {
     return `
-    ${this.sectionTitle(customWidgetDefinitions[widget].label, y)}
+    ${this.sectionTitle(widget, y, customWidgetDefinitions[widget].label)}
     <text x="${this.padding}" y="${y + 36}" fill="${this.theme.muted}" font-size="13">No data available.</text>`;
   }
 
   summary(stats, y) {
     return `
-    ${this.sectionTitle("Summary", y)}
-    ${renderMetric(this.theme, { label: "Stars", value: stats.totalStars, x: 32, y: y + 38, accent: true })}
-    ${renderMetric(this.theme, { label: "Commits", value: stats.totalCommits, x: 202, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Pull Requests", value: stats.totalPullRequests, x: 372, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Issues", value: stats.totalIssues, x: 542, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Contributed To", value: stats.contributedTo, x: 712, y: y + 38, width: 0 })}`;
+    ${this.sectionTitle("stats", y, "Summary")}
+    ${renderMetric(this.theme, { label: this.metricLabel("stats", "stars", "Stars"), value: stats.totalStars, x: 32, y: y + 38, accent: true })}
+    ${renderMetric(this.theme, { label: this.metricLabel("stats", "commits", "Commits"), value: stats.totalCommits, x: 202, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("stats", "prs", "Pull Requests"), value: stats.totalPullRequests, x: 372, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("stats", "issues", "Issues"), value: stats.totalIssues, x: 542, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("stats", "contributed", "Contributed To"), value: stats.contributedTo, x: 712, y: y + 38, width: 0 })}`;
   }
 
   contributionStats(stats, y) {
     return `
-    ${this.sectionTitle("Contribution Stats", y, stats.rangeLabel)}
-    ${renderMetric(this.theme, { label: "Total Contributions", value: stats.totalContributions, x: 32, y: y + 38, width: 210, accent: true })}
-    ${renderMetric(this.theme, { label: "Current Streak", value: stats.currentStreak, x: 282, y: y + 38, width: 210 })}
-    ${renderMetric(this.theme, { label: "Longest Streak", value: stats.longestStreak, x: 532, y: y + 38, width: 0 })}`;
+    ${this.sectionTitle("chart", y, "Contribution Stats", stats.rangeLabel)}
+    ${renderMetric(this.theme, { label: this.metricLabel("chart", "total", "Total Contributions"), value: stats.totalContributions, x: 32, y: y + 38, width: 210, accent: true })}
+    ${renderMetric(this.theme, { label: this.metricLabel("chart", "current_streak", "Current Streak"), value: stats.currentStreak, x: 282, y: y + 38, width: 210 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("chart", "longest_streak", "Longest Streak"), value: stats.longestStreak, x: 532, y: y + 38, width: 0 })}`;
   }
 
   repos(stats, y) {
     return `
-    ${this.sectionTitle("Repository Stats", y)}
-    ${renderMetric(this.theme, { label: "Public Repos", value: stats.publicRepos, x: 32, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Forks", value: stats.totalForks, x: 202, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Stars", value: stats.totalStars, x: 372, y: y + 38, accent: true })}
-    ${renderMetric(this.theme, { label: "Followers", value: stats.followers, x: 542, y: y + 38 })}
-    ${renderMetric(this.theme, { label: "Following", value: stats.following, x: 712, y: y + 38, width: 0 })}`;
+    ${this.sectionTitle("repos", y, "Repository Stats")}
+    ${renderMetric(this.theme, { label: this.metricLabel("repos", "public_repos", "Public Repos"), value: stats.publicRepos, x: 32, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("repos", "forks", "Forks"), value: stats.totalForks, x: 202, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("repos", "stars", "Stars"), value: stats.totalStars, x: 372, y: y + 38, accent: true })}
+    ${renderMetric(this.theme, { label: this.metricLabel("repos", "followers", "Followers"), value: stats.followers, x: 542, y: y + 38 })}
+    ${renderMetric(this.theme, { label: this.metricLabel("repos", "following", "Following"), value: stats.following, x: 712, y: y + 38, width: 0 })}`;
   }
 
   activity(stats, y) {
     const total = stats.total || 1;
     const segments = [
-      { label: "Commits", value: stats.totalCommits, color: this.theme.chart[0] },
-      { label: "PRs", value: stats.totalPullRequests, color: this.theme.chart[1] },
-      { label: "Issues", value: stats.totalIssues, color: this.theme.chart[2] }
+      { key: "commits", label: this.metricLabel("activity", "commits", "Commits"), value: stats.totalCommits, color: this.theme.chart[0] },
+      { key: "prs", label: this.metricLabel("activity", "prs", "PRs"), value: stats.totalPullRequests, color: this.theme.chart[1] },
+      { key: "issues", label: this.metricLabel("activity", "issues", "Issues"), value: stats.totalIssues, color: this.theme.chart[2] }
     ];
     let x = this.padding;
     const bars = segments
@@ -170,7 +223,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
       .join("");
 
     return `
-    ${this.sectionTitle("Activity", y, `${formatNumber(stats.total)} total`)}
+    ${this.sectionTitle("activity", y, "Activity", `${formatNumber(stats.total)} total`)}
     ${bars}
     ${legend}`;
   }
@@ -191,7 +244,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
       .join("");
 
     return `
-    ${this.sectionTitle("Languages", y, `${formatNumber(stats.totalRepos)} repos`)}
+    ${this.sectionTitle("languages", y, "Languages", `${formatNumber(stats.totalRepos)} repos`)}
     ${rows || `<text x="${this.padding}" y="${y + 52}" fill="${this.theme.muted}" font-size="13">No language data available.</text>`}`;
   }
 
@@ -213,8 +266,10 @@ class CustomCardRenderer extends BaseSvgRenderer {
       )
       .join("");
 
+    const defaultDetail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
+
     return `
-    ${this.sectionTitle("Contribution Heatmap", y, `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`)}
+    ${this.sectionTitle("heatmap", y, "Contribution Heatmap", defaultDetail)}
     ${heatmap}`;
   }
 
@@ -231,12 +286,14 @@ class CustomCardRenderer extends BaseSvgRenderer {
       })
       .join("");
 
+    const defaultDetail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
+
     return `
-    ${this.sectionTitle("Weekly Contributions", y, `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`)}
+    ${this.sectionTitle("weekly", y, "Weekly Contributions", defaultDetail)}
     ${bars}`;
   }
 }
 
-export function renderCustomCardSvg(payload, themeName, widgets) {
-  return new CustomCardRenderer({ widgets, themeName }).render(payload);
+export function renderCustomCardSvg(payload, themeName, widgets, customization) {
+  return new CustomCardRenderer({ widgets, themeName, customization }).render(payload);
 }

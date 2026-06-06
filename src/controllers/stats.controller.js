@@ -9,7 +9,7 @@ import {
   fetchWeeklyContributionStats
 } from "../services/stats.service.js";
 import { renderActivityCardSvg } from "../renderers/activity-card.js";
-import { parseCustomWidgets, renderCustomCardSvg } from "../renderers/custom-card.js";
+import { parseCardCustomization, parseCustomWidgets, renderCustomCardSvg } from "../renderers/custom-card.js";
 import { renderHeatmapCardSvg } from "../renderers/heatmap-card.js";
 import { renderLanguagesCardSvg } from "../renderers/languages-card.js";
 import { renderReposCardSvg } from "../renderers/repos-card.js";
@@ -156,16 +156,17 @@ export async function handleCustom(request, response, url) {
   const { format, from, to } = getRequestOptions(url);
   const theme = url.searchParams.get("theme") || "github_dark";
   const widgets = parseCustomWidgets(url.searchParams.get("widgets"));
+  const customization = parseCardCustomization(url.searchParams);
 
   try {
     const stats = await fetchCustomCardStats(username, widgets, { from, to });
 
     if (format === "json") {
-      sendJson(response, 200, { widgets, ...stats });
+      sendJson(response, 200, { widgets, customization, ...stats });
       return;
     }
 
-    sendSvg(response, renderCustomCardSvg(stats, theme || "github_dark", widgets));
+    sendSvg(response, renderCustomCardSvg(stats, theme || "github_dark", widgets, customization));
   } catch (error) {
     handleError(response, error, "Unable to fetch custom GitHub stats card");
   }

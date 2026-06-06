@@ -3,6 +3,8 @@ import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 
 const h = React.createElement;
 
+const CUSTOM_TEXT_MAX_LENGTH = 60;
+
 const availableWidgets = [
   { id: "stats", label: "summary", short: "totals" },
   { id: "heatmap", label: "heatmap", short: "contributions" },
@@ -13,10 +15,43 @@ const availableWidgets = [
   { id: "activity", label: "activity", short: "commits, PRs, issues" }
 ];
 
+const widgetMetricFields = {
+  stats: [
+    { key: "stars", label: "stars" },
+    { key: "commits", label: "commits" },
+    { key: "prs", label: "pull requests" },
+    { key: "issues", label: "issues" },
+    { key: "contributed", label: "contributed to" }
+  ],
+  chart: [
+    { key: "total", label: "total contributions" },
+    { key: "current_streak", label: "current streak" },
+    { key: "longest_streak", label: "longest streak" }
+  ],
+  repos: [
+    { key: "public_repos", label: "public repos" },
+    { key: "forks", label: "forks" },
+    { key: "stars", label: "stars" },
+    { key: "followers", label: "followers" },
+    { key: "following", label: "following" }
+  ],
+  activity: [
+    { key: "commits", label: "commits" },
+    { key: "prs", label: "pull requests" },
+    { key: "issues", label: "issues" }
+  ]
+};
+
 const themes = [
   { id: "github_dark", label: "dark" },
   { id: "github_light", label: "light" }
 ];
+
+const defaultCardCopy = {
+  title: "",
+  subtitle: "",
+  badge: "github-stats"
+};
 
 function moveItem(items, fromIndex, toIndex) {
   const next = [...items];
@@ -25,7 +60,20 @@ function moveItem(items, fromIndex, toIndex) {
   return next;
 }
 
-function buildCardUrl({ username, widgets, theme, from, to }) {
+function clampCustomText(value) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .slice(0, CUSTOM_TEXT_MAX_LENGTH);
+}
+
+function buildMetricsParam(metrics = {}) {
+  return Object.entries(metrics)
+    .filter(([, label]) => label.trim())
+    .map(([key, label]) => `${key}:${clampCustomText(label).trim()}`)
+    .join(",");
+}
+
+function buildCardUrl({ username, widgets, theme, from, to, cardCopy, widgetCopy }) {
   const params = new URLSearchParams({
     username: username.trim(),
     theme,
@@ -35,7 +83,38 @@ function buildCardUrl({ username, widgets, theme, from, to }) {
   if (from) params.set("from", from);
   if (to) params.set("to", to);
 
+  if (cardCopy.title.trim()) params.set("title", clampCustomText(cardCopy.title).trim());
+  if (cardCopy.subtitle.trim()) params.set("subtitle", clampCustomText(cardCopy.subtitle).trim());
+  if (cardCopy.badge.trim() && cardCopy.badge.trim() !== defaultCardCopy.badge) {
+    params.set("badge", clampCustomText(cardCopy.badge).trim());
+  }
+
+  for (const widgetId of widgets) {
+    const copy = widgetCopy[widgetId] || {};
+    if (copy.title?.trim()) params.set(`label_${widgetId}`, clampCustomText(copy.title).trim());
+    if (copy.detail?.trim()) params.set(`detail_${widgetId}`, clampCustomText(copy.detail).trim());
+
+    const metrics = buildMetricsParam(copy.metrics);
+    if (metrics) params.set(`metrics_${widgetId}`, metrics);
+  }
+
   return `${window.location.origin}/api/stats/custom?${params.toString()}`;
+}
+
+function CustomTextField({ label, value, placeholder, onChange, hint }) {
+  return h(
+    "label",
+    { className: "mini-field" },
+    h("span", null, label),
+    h("input", {
+      value,
+      maxLength: CUSTOM_TEXT_MAX_LENGTH,
+      placeholder,
+      spellCheck: "false",
+      onChange: (event) => onChange(clampCustomText(event.target.value))
+    }),
+    hint && h("small", null, hint)
+  );
 }
 
 function BuilderApp() {
@@ -44,6 +123,9 @@ function BuilderApp() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [widgets, setWidgets] = useState(["stats", "heatmap", "weekly"]);
+  const [cardCopy, setCardCopy] = useState({ ...defaultCardCopy });
+  const [widgetCopy, setWidgetCopy] = useState({});
+  const [expandedWidget, setExpandedWidget] = useState(null);
   const [dragged, setDragged] = useState(null);
   const [copied, setCopied] = useState("");
   const [toast, setToast] = useState(null);
@@ -54,14 +136,52 @@ function BuilderApp() {
   );
 
   const cardUrl = useMemo(
-    () => buildCardUrl({ username, widgets, theme, from, to }),
-    [username, widgets, theme, from, to]
+    () => buildCardUrl({ username, widgets, theme, from, to, cardCopy, widgetCopy }),
+    [username, widgets, theme, from, to, cardCopy, widgetCopy]
   );
   const markdown = `![github stats](${cardUrl})`;
+
+  const previewSubtitle =
+    cardCopy.subtitle.trim() || `@${username.trim() || "username"} · custom GitHub profile card`;
+  const previewTitle = cardCopy.title.trim() || username.trim() || "username";
+
+  function updateCardCopy(key, value) {
+    setCardCopy((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateWidgetCopy(widgetId, patch) {
+    setWidgetCopy((current) => ({
+      ...current,
+      [widgetId]: {
+        title: "",
+        detail: "",
+        metrics: {},
+        ...current[widgetId],
+        ...patch
+      }
+    }));
+  }
+
+  function updateWidgetMetric(widgetId, metricKey, value) {
+    setWidgetCopy((current) => {
+      const existing = current[widgetId] || { title: "", detail: "", metrics: {} };
+      return {
+        ...current,
+        [widgetId]: {
+          ...existing,
+          metrics: {
+            ...existing.metrics,
+            [metricKey]: clampCustomText(value)
+          }
+        }
+      };
+    });
+  }
 
   function addWidget(id) {
     if (!widgets.includes(id)) {
       setWidgets([...widgets, id]);
+      setExpandedWidget(id);
     }
   }
 
@@ -69,6 +189,10 @@ function BuilderApp() {
     const removedIndex = widgets.indexOf(id);
     const next = widgets.filter((widget) => widget !== id);
     setWidgets(next);
+
+    if (expandedWidget === id) {
+      setExpandedWidget(null);
+    }
 
     if (showUndo && removedIndex >= 0) {
       const removedWidget = availableWidgets.find((widget) => widget.id === id);
@@ -126,6 +250,7 @@ function BuilderApp() {
         const next = [...widgets];
         next.splice(targetIndex, 0, id);
         setWidgets(next);
+        setExpandedWidget(id);
       }
       return;
     }
@@ -138,6 +263,65 @@ function BuilderApp() {
         setWidgets(moveItem(widgets, fromIndex, adjustedIndex));
       }
     }
+  }
+
+  function renderWidgetCustomizer(widget) {
+    const copy = widgetCopy[widget.id] || { title: "", detail: "", metrics: {} };
+    const metricFields = widgetMetricFields[widget.id] || [];
+    const isExpanded = expandedWidget === widget.id;
+
+    return h(
+      "div",
+      { className: "widget-customize" },
+      h(
+        "button",
+        {
+          type: "button",
+          className: isExpanded ? "customize-toggle is-open" : "customize-toggle",
+          onClick: () => setExpandedWidget(isExpanded ? null : widget.id)
+        },
+        isExpanded ? "hide labels" : "edit labels"
+      ),
+      isExpanded &&
+        h(
+          "div",
+          { className: "customize-panel" },
+          h(
+            "div",
+            { className: "customize-grid" },
+            h(CustomTextField, {
+              label: "section title",
+              value: copy.title,
+              placeholder: widget.label,
+              hint: `${copy.title.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+              onChange: (value) => updateWidgetCopy(widget.id, { title: value })
+            }),
+            h(CustomTextField, {
+              label: "section detail",
+              value: copy.detail,
+              placeholder: "optional right-side note",
+              hint: `${copy.detail.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+              onChange: (value) => updateWidgetCopy(widget.id, { detail: value })
+            })
+          ),
+          metricFields.length > 0 &&
+            h(
+              "div",
+              { className: "metric-grid" },
+              h("p", { className: "metric-grid-title" }, "metric labels"),
+              metricFields.map((field) =>
+                h(CustomTextField, {
+                  key: field.key,
+                  label: field.label,
+                  value: copy.metrics?.[field.key] || "",
+                  placeholder: field.label,
+                  hint: `${(copy.metrics?.[field.key] || "").length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+                  onChange: (value) => updateWidgetMetric(widget.id, field.key, value)
+                })
+              )
+            )
+        )
+    );
   }
 
   return h(
@@ -202,6 +386,36 @@ function BuilderApp() {
     ),
     h(
       "section",
+      { className: "card-copy-bar" },
+      h("h2", null, "card text"),
+      h(
+        "div",
+        { className: "card-copy-grid" },
+        h(CustomTextField, {
+          label: "title",
+          value: cardCopy.title,
+          placeholder: "uses github display name",
+          hint: `${cardCopy.title.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+          onChange: (value) => updateCardCopy("title", value)
+        }),
+        h(CustomTextField, {
+          label: "subtitle",
+          value: cardCopy.subtitle,
+          placeholder: `@${username || "username"} · custom GitHub profile card`,
+          hint: `${cardCopy.subtitle.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+          onChange: (value) => updateCardCopy("subtitle", value)
+        }),
+        h(CustomTextField, {
+          label: "badge",
+          value: cardCopy.badge,
+          placeholder: defaultCardCopy.badge,
+          hint: `${cardCopy.badge.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
+          onChange: (value) => updateCardCopy("badge", value)
+        })
+      )
+    ),
+    h(
+      "section",
       { className: "workspace" },
       h(
         "aside",
@@ -246,7 +460,12 @@ function BuilderApp() {
           h(
             "div",
             { className: "canvas-head" },
-            h("div", null, h("strong", null, username || "username"), h("span", null, "custom card")),
+            h(
+              "div",
+              null,
+              h("strong", null, previewTitle),
+              h("span", null, previewSubtitle)
+            ),
             h("code", null, `${selectedWidgets.length} elements`)
           ),
           h(
@@ -258,30 +477,46 @@ function BuilderApp() {
                     "div",
                     {
                       key: widget.id,
-                      className: "drop-row",
-                      draggable: true,
-                      onDragStart: (event) => {
-                        const value = `canvas:${widget.id}`;
-                        setDragged(value);
-                        event.dataTransfer.setData("text/plain", value);
-                      },
-                      onDragEnd: () => setDragged(null),
-                      onDragOver: (event) => event.preventDefault(),
-                      onDrop: (event) => onDropCanvas(event, index)
+                      className: expandedWidget === widget.id ? "drop-block is-expanded" : "drop-block"
                     },
-                    h("span", { className: "thread-line", "aria-hidden": true }),
-                    h("span", { className: "grab", "aria-hidden": true }, "::"),
-                    h("div", { className: "drop-copy" }, h("strong", null, widget.label), h("small", null, widget.short)),
                     h(
-                      "button",
+                      "div",
                       {
-                        type: "button",
-                        className: "icon-button",
-                        "aria-label": `remove ${widget.label}`,
-                        onClick: () => removeWidget(widget.id)
+                        className: "drop-row",
+                        draggable: true,
+                        onDragStart: (event) => {
+                          const value = `canvas:${widget.id}`;
+                          setDragged(value);
+                          event.dataTransfer.setData("text/plain", value);
+                        },
+                        onDragEnd: () => setDragged(null),
+                        onDragOver: (event) => event.preventDefault(),
+                        onDrop: (event) => onDropCanvas(event, index)
                       },
-                      "x"
-                    )
+                      h("span", { className: "thread-line", "aria-hidden": true }),
+                      h("span", { className: "grab", "aria-hidden": true }, "::"),
+                      h(
+                        "div",
+                        { className: "drop-copy" },
+                        h("strong", null, widgetCopy[widget.id]?.title?.trim() || widget.label),
+                        h(
+                          "small",
+                          null,
+                          widgetCopy[widget.id]?.detail?.trim() || widget.short
+                        )
+                      ),
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "icon-button",
+                          "aria-label": `remove ${widget.label}`,
+                          onClick: () => removeWidget(widget.id)
+                        },
+                        "x"
+                      )
+                    ),
+                    renderWidgetCustomizer(widget)
                   )
                 )
               : h("div", { className: "empty-canvas" }, "select elements from the left rail")

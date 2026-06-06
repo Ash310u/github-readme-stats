@@ -62,6 +62,28 @@ textarea {
   margin: 0 auto 12px;
 }
 
+.card-copy-bar {
+  max-width: 1480px;
+  margin: 0 auto 12px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.card-copy-bar h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.15;
+  font-weight: 780;
+}
+
+.card-copy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .brand-block h1,
 .brand-block p,
 .palette h2,
@@ -288,6 +310,14 @@ textarea {
   padding-top: 8px;
 }
 
+.drop-block {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.drop-block.is-expanded {
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .drop-row {
   position: relative;
   display: grid;
@@ -296,7 +326,6 @@ textarea {
   align-items: center;
   min-height: 72px;
   padding: 10px 0 10px 0;
-  border-bottom: 1px solid var(--hairline);
 }
 
 .drop-row:hover {
@@ -363,6 +392,91 @@ textarea {
   min-height: 420px;
   color: var(--tertiary);
   font-size: 15px;
+}
+
+.mini-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.1;
+}
+
+.mini-field input {
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+.mini-field input:hover {
+  background: var(--surface-hover);
+}
+
+.mini-field input:focus {
+  border-color: rgba(78, 161, 255, 0.68);
+}
+
+.mini-field small {
+  color: var(--tertiary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.widget-customize {
+  padding: 0 0 10px 44px;
+}
+
+.customize-toggle {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.customize-toggle:hover {
+  background: rgba(78, 161, 255, 0.08);
+}
+
+.customize-toggle.is-open {
+  color: var(--secondary);
+}
+
+.customize-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.customize-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.metric-grid-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--tertiary);
+  font-size: 12px;
+  font-weight: 780;
+  text-transform: lowercase;
 }
 
 .output-panel {
@@ -452,13 +566,18 @@ textarea {
 
 @media (max-width: 1180px) {
   .builder-bar,
-  .workspace {
+  .workspace,
+  .card-copy-grid {
     grid-template-columns: 1fr 1fr;
   }
 
   .brand-block,
   .canvas-zone {
     grid-column: 1 / -1;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -468,7 +587,10 @@ textarea {
   }
 
   .builder-bar,
-  .workspace {
+  .workspace,
+  .card-copy-grid,
+  .customize-grid,
+  .metric-grid {
     grid-template-columns: 1fr;
   }
 
