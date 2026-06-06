@@ -2,7 +2,9 @@
 
 A growing API for generating GitHub stats cards, contribution charts, and profile widgets for README profiles, websites, and dashboards.
 
-![GitHub stats card preview](./profile_ss.png)
+![GitHub stats builder preview](./builder-preview.png)
+
+![Custom GitHub stats card preview](./custom-card-preview.png)
 
 ## Use The API
 
@@ -18,10 +20,32 @@ Use the contribution chart with the same clean default card design:
 ![GitHub Contribution Chart](https://api-github-readme-stats.vercel.app/api/stats/chart?username=Ash310u)
 ```
 
+More chart types:
+
+```md
+![GitHub Languages](https://api-github-readme-stats.vercel.app/api/stats/languages?username=Ash310u)
+![GitHub Repos](https://api-github-readme-stats.vercel.app/api/stats/repos?username=Ash310u)
+![GitHub Activity](https://api-github-readme-stats.vercel.app/api/stats/activity?username=Ash310u)
+![GitHub Heatmap](https://api-github-readme-stats.vercel.app/api/stats/heatmap?username=Ash310u)
+![GitHub Weekly Chart](https://api-github-readme-stats.vercel.app/api/stats/weekly?username=Ash310u)
+```
+
 Use a dark GitHub-style theme:
 
 ```md
 ![GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&theme=github_dark)
+```
+
+Build a custom dark card in the browser:
+
+```text
+https://api-github-readme-stats.vercel.app/
+```
+
+Or use the custom card endpoint directly:
+
+```md
+![Custom GitHub Stats](https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&theme=github_dark&widgets=stats,heatmap,weekly)
 ```
 
 Get raw JSON instead of an SVG:
@@ -29,6 +53,7 @@ Get raw JSON instead of an SVG:
 ```text
 https://api-github-readme-stats.vercel.app/api/stats?username=Ash310u&format=json
 https://api-github-readme-stats.vercel.app/api/stats/chart?username=Ash310u&format=json
+https://api-github-readme-stats.vercel.app/api/stats/custom?username=Ash310u&widgets=stats,heatmap,weekly&format=json
 ```
 
 ## Endpoints
@@ -36,7 +61,13 @@ https://api-github-readme-stats.vercel.app/api/stats/chart?username=Ash310u&form
 | Endpoint | Description |
 | --- | --- |
 | `/api/stats` | Summary card with stars, commits, pull requests, issues, and repositories contributed to. |
-| `/api/stats/chart` | Modern contribution chart with total contributions, current streak, and longest streak. |
+| `/api/stats/custom` | One combined SVG card made from selected draggable widgets in the builder. |
+| `/api/stats/chart` | Contribution metrics with total contributions, current streak, and longest streak. |
+| `/api/stats/languages` | Horizontal bar chart of top programming languages by repository count. |
+| `/api/stats/repos` | Repository-focused card with forks, stars, followers, and following. |
+| `/api/stats/activity` | Stacked bar chart breaking down commits, pull requests, and issues. |
+| `/api/stats/heatmap` | GitHub-style contribution heatmap grid for the selected date range. |
+| `/api/stats/weekly` | Vertical bar chart of contributions grouped by week. |
 | `/health` | Health check with available endpoint examples. |
 
 ## Settings
@@ -46,8 +77,9 @@ https://api-github-readme-stats.vercel.app/api/stats/chart?username=Ash310u&form
 | `username` | Yes | none | Any GitHub username | The profile to show stats for. |
 | `theme` | No | `github_light` | `github_light`, `github_dark`, `light`, `dark` | Changes the SVG colors. |
 | `format` | No | `svg` | `svg`, `json` | Returns an image card or raw stats data. |
-| `from` | No | Jan 1 of the current year | `YYYY-MM-DD` | Chart-only start date for contribution data. |
-| `to` | No | Today | `YYYY-MM-DD` | Chart-only end date for contribution data. |
+| `widgets` | No | `stats,heatmap,weekly` | `stats`, `heatmap`, `weekly`, `chart`, `languages`, `repos`, `activity` | Comma-separated widget list for `/api/stats/custom`. |
+| `from` | No | Jan 1 of the current year | `YYYY-MM-DD` | Start date for contribution-based cards (`chart`, `heatmap`, `weekly`). |
+| `to` | No | Today | `YYYY-MM-DD` | End date for contribution-based cards (`chart`, `heatmap`, `weekly`). |
 
 ## Stats Shown
 
@@ -64,6 +96,37 @@ The contribution chart shows:
 - Total contributions in the selected date range.
 - Current contribution streak.
 - Longest contribution streak.
+
+The languages card shows:
+
+- Top 5 programming languages ranked by public repository count.
+- Percentage share for each language.
+
+The repos card shows:
+
+- Public repositories, total forks, and total stars.
+- Average stars per repository, followers, and following.
+
+The activity card shows:
+
+- A stacked bar of commits, pull requests, and issues.
+- Count and percentage for each activity type.
+
+The heatmap card shows:
+
+- A GitHub-style contribution grid for the selected date range.
+- Total contributions and a less-to-more legend.
+
+The weekly chart shows:
+
+- A bar chart of contributions grouped by week.
+- The most recent 26 weeks from the selected date range.
+
+The custom card builder shows:
+
+- A React drag-and-drop editor at `/`.
+- A black card canvas by default.
+- A generated `/api/stats/custom` image URL and Markdown snippet for profile READMEs.
 
 ## GitHub Token
 
@@ -133,6 +196,11 @@ Try it locally:
 ```text
 http://localhost:3000/api/stats?username=Ash310u
 http://localhost:3000/api/stats/chart?username=Ash310u
+http://localhost:3000/api/stats/languages?username=Ash310u
+http://localhost:3000/api/stats/repos?username=Ash310u
+http://localhost:3000/api/stats/activity?username=Ash310u
+http://localhost:3000/api/stats/heatmap?username=Ash310u
+http://localhost:3000/api/stats/weekly?username=Ash310u
 ```
 
 If port `3000` is already busy, use another port:
