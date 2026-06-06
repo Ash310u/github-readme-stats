@@ -1,57 +1,66 @@
-import React, { useMemo, useState } from "https://esm.sh/react@18.3.1";
+import React, { Fragment, useMemo, useState } from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
+import { AboutPage, SiteFooter, SiteNav, usePath } from "./site.js";
 
 const h = React.createElement;
 
 const CUSTOM_TEXT_MAX_LENGTH = 60;
 
-const availableWidgets = [
-  { id: "stats", label: "summary", short: "totals" },
-  { id: "heatmap", label: "heatmap", short: "contributions" },
-  { id: "weekly", label: "weekly", short: "bars" },
-  { id: "chart", label: "streaks", short: "contribution stats" },
-  { id: "languages", label: "languages", short: "top repos" },
-  { id: "repos", label: "repos", short: "repository stats" },
-  { id: "activity", label: "activity", short: "commits, PRs, issues" }
+const elementGroups = [
+  {
+    id: "summary",
+    label: "Summary",
+    elements: [
+      { id: "stars", label: "Stars", desc: "Total stars earned" },
+      { id: "commits", label: "Commits", desc: "Commit count" },
+      { id: "prs", label: "Pull requests", desc: "PRs opened" },
+      { id: "issues", label: "Issues", desc: "Issues opened" },
+      { id: "contributed", label: "Contributed to", desc: "Repos contributed" }
+    ]
+  },
+  {
+    id: "streaks",
+    label: "Streaks",
+    elements: [
+      { id: "total_contributions", label: "Total contributions", desc: "In date range" },
+      { id: "current_streak", label: "Current streak", desc: "Active days" },
+      { id: "longest_streak", label: "Longest streak", desc: "Best run" }
+    ]
+  },
+  {
+    id: "repos",
+    label: "Repositories",
+    elements: [
+      { id: "public_repos", label: "Public repos", desc: "Repository count" },
+      { id: "forks", label: "Forks", desc: "Total forks" },
+      { id: "repo_stars", label: "Repo stars", desc: "Stars on repos" },
+      { id: "followers", label: "Followers", desc: "Follower count" },
+      { id: "following", label: "Following", desc: "Following count" }
+    ]
+  },
+  {
+    id: "charts",
+    label: "Charts",
+    elements: [
+      { id: "heatmap", label: "Heatmap", desc: "Contribution grid" },
+      { id: "weekly", label: "Weekly chart", desc: "Weekly bars" },
+      { id: "languages", label: "Languages", desc: "Top languages" },
+      { id: "activity", label: "Activity", desc: "Commits, PRs, issues" }
+    ]
+  }
 ];
 
-const widgetMetricFields = {
-  stats: [
-    { key: "stars", label: "stars" },
-    { key: "commits", label: "commits" },
-    { key: "prs", label: "pull requests" },
-    { key: "issues", label: "issues" },
-    { key: "contributed", label: "contributed to" }
-  ],
-  chart: [
-    { key: "total", label: "total contributions" },
-    { key: "current_streak", label: "current streak" },
-    { key: "longest_streak", label: "longest streak" }
-  ],
-  repos: [
-    { key: "public_repos", label: "public repos" },
-    { key: "forks", label: "forks" },
-    { key: "stars", label: "stars" },
-    { key: "followers", label: "followers" },
-    { key: "following", label: "following" }
-  ],
-  activity: [
-    { key: "commits", label: "commits" },
-    { key: "prs", label: "pull requests" },
-    { key: "issues", label: "issues" }
-  ]
-};
+const catalog = elementGroups.flatMap((group) =>
+  group.elements.map((element) => ({ ...element, group: group.label }))
+);
 
 const themes = [
-  { id: "github_dark", label: "dark" },
-  { id: "github_light", label: "light" }
+  { id: "github_dark", label: "Dark" },
+  { id: "github_light", label: "Light" }
 ];
 
-const defaultCardCopy = {
-  title: "",
-  subtitle: "",
-  badge: "github-stats"
-};
+const defaultCardCopy = { title: "", subtitle: "", badge: "github-stats" };
+const defaultElements = ["stars", "commits", "prs", "issues", "contributed", "heatmap", "weekly"];
 
 function moveItem(items, fromIndex, toIndex) {
   const next = [...items];
@@ -66,54 +75,44 @@ function clampCustomText(value) {
     .slice(0, CUSTOM_TEXT_MAX_LENGTH);
 }
 
-function buildMetricsParam(metrics = {}) {
-  return Object.entries(metrics)
-    .filter(([, label]) => label.trim())
-    .map(([key, label]) => `${key}:${clampCustomText(label).trim()}`)
-    .join(",");
-}
-
-function buildCardUrl({ username, widgets, theme, from, to, cardCopy, widgetCopy }) {
+function buildCardUrl({ username, elements, theme, from, to, cardCopy }) {
   const params = new URLSearchParams({
     username: username.trim(),
     theme,
-    widgets: widgets.join(",")
+    elements: elements.join(",")
   });
 
   if (from) params.set("from", from);
   if (to) params.set("to", to);
-
   if (cardCopy.title.trim()) params.set("title", clampCustomText(cardCopy.title).trim());
   if (cardCopy.subtitle.trim()) params.set("subtitle", clampCustomText(cardCopy.subtitle).trim());
   if (cardCopy.badge.trim() && cardCopy.badge.trim() !== defaultCardCopy.badge) {
     params.set("badge", clampCustomText(cardCopy.badge).trim());
   }
 
-  for (const widgetId of widgets) {
-    const copy = widgetCopy[widgetId] || {};
-    if (copy.title?.trim()) params.set(`label_${widgetId}`, clampCustomText(copy.title).trim());
-    if (copy.detail?.trim()) params.set(`detail_${widgetId}`, clampCustomText(copy.detail).trim());
-
-    const metrics = buildMetricsParam(copy.metrics);
-    if (metrics) params.set(`metrics_${widgetId}`, metrics);
-  }
-
   return `${window.location.origin}/api/stats/custom?${params.toString()}`;
 }
 
-function CustomTextField({ label, value, placeholder, onChange, hint }) {
+function insertAtIndex(list, id, targetIndex) {
+  const next = list.filter((item) => item !== id);
+  const index = Math.max(0, Math.min(targetIndex, next.length));
+  next.splice(index, 0, id);
+  return next;
+}
+
+function Input({ label, value, placeholder, onChange, type = "text", maxLength }) {
   return h(
     "label",
-    { className: "mini-field" },
-    h("span", null, label),
+    { className: "input-field" },
+    h("span", { className: "input-label" }, label),
     h("input", {
+      type,
       value,
-      maxLength: CUSTOM_TEXT_MAX_LENGTH,
+      maxLength,
       placeholder,
       spellCheck: "false",
-      onChange: (event) => onChange(clampCustomText(event.target.value))
-    }),
-    hint && h("small", null, hint)
+      onChange: (event) => onChange(event.target.value)
+    })
   );
 }
 
@@ -122,106 +121,72 @@ function BuilderApp() {
   const [theme, setTheme] = useState("github_dark");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [widgets, setWidgets] = useState(["stats", "heatmap", "weekly"]);
+  const [elements, setElements] = useState([...defaultElements]);
   const [cardCopy, setCardCopy] = useState({ ...defaultCardCopy });
-  const [widgetCopy, setWidgetCopy] = useState({});
-  const [expandedWidget, setExpandedWidget] = useState(null);
-  const [dragged, setDragged] = useState(null);
+  const [query, setQuery] = useState("");
+  const [showDates, setShowDates] = useState(false);
+  const [showHeaderEdit, setShowHeaderEdit] = useState(false);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
   const [copied, setCopied] = useState("");
+  const [previewError, setPreviewError] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const selectedWidgets = useMemo(
-    () => widgets.map((id) => availableWidgets.find((widget) => widget.id === id)).filter(Boolean),
-    [widgets]
+  const ordered = useMemo(
+    () => elements.map((id) => catalog.find((item) => item.id === id)).filter(Boolean),
+    [elements]
   );
+
+  const filteredGroups = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return elementGroups;
+
+    return elementGroups
+      .map((group) => ({
+        ...group,
+        elements: group.elements.filter(
+          (element) =>
+            element.label.toLowerCase().includes(needle) ||
+            element.desc.toLowerCase().includes(needle) ||
+            group.label.toLowerCase().includes(needle)
+        )
+      }))
+      .filter((group) => group.elements.length > 0);
+  }, [query]);
 
   const cardUrl = useMemo(
-    () => buildCardUrl({ username, widgets, theme, from, to, cardCopy, widgetCopy }),
-    [username, widgets, theme, from, to, cardCopy, widgetCopy]
+    () => (elements.length && username.trim() ? buildCardUrl({ username, elements, theme, from, to, cardCopy }) : ""),
+    [username, elements, theme, from, to, cardCopy]
   );
-  const markdown = `![github stats](${cardUrl})`;
-
-  const previewSubtitle =
-    cardCopy.subtitle.trim() || `@${username.trim() || "username"} · custom GitHub profile card`;
-  const previewTitle = cardCopy.title.trim() || username.trim() || "username";
+  const markdown = cardUrl ? `![github stats](${cardUrl})` : "";
 
   function updateCardCopy(key, value) {
-    setCardCopy((current) => ({ ...current, [key]: value }));
+    setCardCopy((current) => ({ ...current, [key]: clampCustomText(value) }));
   }
 
-  function updateWidgetCopy(widgetId, patch) {
-    setWidgetCopy((current) => ({
-      ...current,
-      [widgetId]: {
-        title: "",
-        detail: "",
-        metrics: {},
-        ...current[widgetId],
-        ...patch
-      }
-    }));
-  }
-
-  function updateWidgetMetric(widgetId, metricKey, value) {
-    setWidgetCopy((current) => {
-      const existing = current[widgetId] || { title: "", detail: "", metrics: {} };
-      return {
-        ...current,
-        [widgetId]: {
-          ...existing,
-          metrics: {
-            ...existing.metrics,
-            [metricKey]: clampCustomText(value)
-          }
-        }
-      };
-    });
-  }
-
-  function addWidget(id) {
-    if (!widgets.includes(id)) {
-      setWidgets([...widgets, id]);
-      setExpandedWidget(id);
-    }
-  }
-
-  function removeWidget(id, showUndo = true) {
-    const removedIndex = widgets.indexOf(id);
-    const next = widgets.filter((widget) => widget !== id);
-    setWidgets(next);
-
-    if (expandedWidget === id) {
-      setExpandedWidget(null);
-    }
-
-    if (showUndo && removedIndex >= 0) {
-      const removedWidget = availableWidgets.find((widget) => widget.id === id);
-      setToast({ id, index: removedIndex, label: removedWidget?.label || id });
-      window.setTimeout(() => {
-        setToast((current) => (current?.id === id ? null : current));
-      }, 5000);
-    }
-  }
-
-  function toggleWidget(id) {
-    if (widgets.includes(id)) {
-      removeWidget(id);
+  function toggleElement(id) {
+    if (elements.includes(id)) {
+      removeElement(id);
       return;
     }
+    setElements([...elements, id]);
+  }
 
-    addWidget(id);
+  function removeElement(id, showUndo = true) {
+    const removedIndex = elements.indexOf(id);
+    setElements(elements.filter((item) => item !== id));
+
+    if (showUndo && removedIndex >= 0) {
+      const label = catalog.find((item) => item.id === id)?.label || id;
+      setToast({ id, index: removedIndex, label });
+      window.setTimeout(() => setToast((current) => (current?.id === id ? null : current)), 4500);
+    }
   }
 
   function undoRemove() {
-    if (!toast) {
-      return;
-    }
-
-    setWidgets((current) => {
-      if (current.includes(toast.id)) {
-        return current;
-      }
-
+    if (!toast) return;
+    setElements((current) => {
+      if (current.includes(toast.id)) return current;
       const next = [...current];
       next.splice(Math.min(toast.index, next.length), 0, toast.id);
       return next;
@@ -229,332 +194,337 @@ function BuilderApp() {
     setToast(null);
   }
 
+  function endDrag() {
+    setDraggedId(null);
+    setDropIndex(null);
+  }
+
+  function onDragStart(event, id) {
+    setDraggedId(id);
+    setDropIndex(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  }
+
+  function onRowDragOver(event, index) {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    setDropIndex(before ? index : index + 1);
+  }
+
+  function onListDragOver(event) {
+    if (!ordered.length) return;
+    event.preventDefault();
+    setDropIndex(ordered.length);
+  }
+
+  function onDrop(event, targetIndex) {
+    event.preventDefault();
+    const id = draggedId || event.dataTransfer.getData("text/plain");
+    if (!id) {
+      endDrag();
+      return;
+    }
+    const index = targetIndex ?? dropIndex ?? ordered.length;
+    setElements((current) => insertAtIndex(current, id, index));
+    endDrag();
+  }
+
   function copy(value, label) {
+    if (!value) return;
     navigator.clipboard.writeText(value).then(() => {
       setCopied(label);
-      window.setTimeout(() => setCopied(""), 1600);
+      window.setTimeout(() => setCopied(""), 1800);
     });
   }
 
-  function onDropCanvas(event, targetIndex = widgets.length) {
-    event.preventDefault();
-    const source = dragged || event.dataTransfer.getData("text/plain");
-
-    if (!source) {
-      return;
-    }
-
-    if (source.startsWith("palette:")) {
-      const id = source.replace("palette:", "");
-      if (!widgets.includes(id)) {
-        const next = [...widgets];
-        next.splice(targetIndex, 0, id);
-        setWidgets(next);
-        setExpandedWidget(id);
-      }
-      return;
-    }
-
-    if (source.startsWith("canvas:")) {
-      const id = source.replace("canvas:", "");
-      const fromIndex = widgets.indexOf(id);
-      if (fromIndex >= 0) {
-        const adjustedIndex = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
-        setWidgets(moveItem(widgets, fromIndex, adjustedIndex));
-      }
-    }
-  }
-
-  function renderWidgetCustomizer(widget) {
-    const copy = widgetCopy[widget.id] || { title: "", detail: "", metrics: {} };
-    const metricFields = widgetMetricFields[widget.id] || [];
-    const isExpanded = expandedWidget === widget.id;
-
-    return h(
-      "div",
-      { className: "widget-customize" },
-      h(
-        "button",
-        {
-          type: "button",
-          className: isExpanded ? "customize-toggle is-open" : "customize-toggle",
-          onClick: () => setExpandedWidget(isExpanded ? null : widget.id)
-        },
-        isExpanded ? "hide labels" : "edit labels"
-      ),
-      isExpanded &&
-        h(
-          "div",
-          { className: "customize-panel" },
-          h(
-            "div",
-            { className: "customize-grid" },
-            h(CustomTextField, {
-              label: "section title",
-              value: copy.title,
-              placeholder: widget.label,
-              hint: `${copy.title.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-              onChange: (value) => updateWidgetCopy(widget.id, { title: value })
-            }),
-            h(CustomTextField, {
-              label: "section detail",
-              value: copy.detail,
-              placeholder: "optional right-side note",
-              hint: `${copy.detail.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-              onChange: (value) => updateWidgetCopy(widget.id, { detail: value })
-            })
-          ),
-          metricFields.length > 0 &&
-            h(
-              "div",
-              { className: "metric-grid" },
-              h("p", { className: "metric-grid-title" }, "metric labels"),
-              metricFields.map((field) =>
-                h(CustomTextField, {
-                  key: field.key,
-                  label: field.label,
-                  value: copy.metrics?.[field.key] || "",
-                  placeholder: field.label,
-                  hint: `${(copy.metrics?.[field.key] || "").length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-                  onChange: (value) => updateWidgetMetric(widget.id, field.key, value)
-                })
-              )
-            )
-        )
-    );
-  }
-
   return h(
-    "main",
-    { className: "app-shell" },
+    "div",
+    { className: "dashboard" },
     h(
       "section",
-      { className: "builder-bar" },
+      { className: "dashboard-toolbar card" },
+      h(Input, {
+        label: "GitHub username",
+        value: username,
+        placeholder: "e.g. Ash310u",
+        onChange: setUsername
+      }),
       h(
         "div",
-        { className: "brand-block" },
-        h("p", { className: "eyebrow" }, "github stats builder"),
-        h("h1", null, "custom profile card")
-      ),
-      h(
-        "label",
-        { className: "field" },
-        h("span", null, "username"),
-        h("input", {
-          value: username,
-          onChange: (event) => setUsername(event.target.value),
-          placeholder: "github username",
-          spellCheck: "false"
-        })
-      ),
-      h(
-        "div",
-        { className: "segmented", role: "group", "aria-label": "theme" },
-        themes.map((item) =>
-          h(
-            "button",
-            {
-              key: item.id,
-              type: "button",
-              className: theme === item.id ? "is-active" : "",
-              onClick: () => setTheme(item.id)
-            },
-            item.label
-          )
-        )
-      ),
-      h(
-        "label",
-        { className: "field compact" },
-        h("span", null, "from"),
-        h("input", {
-          type: "date",
-          value: from,
-          onChange: (event) => setFrom(event.target.value)
-        })
-      ),
-      h(
-        "label",
-        { className: "field compact" },
-        h("span", null, "to"),
-        h("input", {
-          type: "date",
-          value: to,
-          onChange: (event) => setTo(event.target.value)
-        })
-      )
-    ),
-    h(
-      "section",
-      { className: "card-copy-bar" },
-      h("h2", null, "card text"),
-      h(
-        "div",
-        { className: "card-copy-grid" },
-        h(CustomTextField, {
-          label: "title",
-          value: cardCopy.title,
-          placeholder: "uses github display name",
-          hint: `${cardCopy.title.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-          onChange: (value) => updateCardCopy("title", value)
-        }),
-        h(CustomTextField, {
-          label: "subtitle",
-          value: cardCopy.subtitle,
-          placeholder: `@${username || "username"} · custom GitHub profile card`,
-          hint: `${cardCopy.subtitle.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-          onChange: (value) => updateCardCopy("subtitle", value)
-        }),
-        h(CustomTextField, {
-          label: "badge",
-          value: cardCopy.badge,
-          placeholder: defaultCardCopy.badge,
-          hint: `${cardCopy.badge.length}/${CUSTOM_TEXT_MAX_LENGTH}`,
-          onChange: (value) => updateCardCopy("badge", value)
-        })
-      )
-    ),
-    h(
-      "section",
-      { className: "workspace" },
-      h(
-        "aside",
-        { className: "palette" },
-        h("h2", null, "elements"),
+        { className: "input-field" },
+        h("span", { className: "input-label" }, "Theme"),
         h(
           "div",
-          { className: "palette-list" },
-          availableWidgets.map((widget) =>
+          { className: "theme-switch", role: "group", "aria-label": "Theme" },
+          themes.map((item) =>
             h(
               "button",
               {
-                key: widget.id,
+                key: item.id,
                 type: "button",
-                className: widgets.includes(widget.id) ? "palette-item is-selected" : "palette-item",
-                "aria-pressed": widgets.includes(widget.id),
-                draggable: true,
-                onClick: () => toggleWidget(widget.id),
-                onDragStart: (event) => {
-                  const value = `palette:${widget.id}`;
-                  setDragged(value);
-                  event.dataTransfer.setData("text/plain", value);
-                },
-                onDragEnd: () => setDragged(null)
+                className: theme === item.id ? "active" : "",
+                onClick: () => setTheme(item.id)
               },
-              h("span", { className: "selection-dot", "aria-hidden": true }),
-              h("span", { className: "palette-copy" }, h("strong", null, widget.label), h("small", null, widget.short))
+              item.label
             )
           )
         )
       ),
       h(
+        "div",
+        { className: "toolbar-actions" },
+        h(
+          "button",
+          { type: "button", className: "ghost-btn", onClick: () => setShowDates((open) => !open) },
+          showDates ? "Hide dates" : "Date range"
+        ),
+        h(
+          "button",
+          { type: "button", className: "ghost-btn", onClick: () => setShowHeaderEdit((open) => !open) },
+          showHeaderEdit ? "Hide header text" : "Edit header"
+        ),
+        h(
+          "button",
+          { type: "button", className: "ghost-btn", onClick: () => setElements([...defaultElements]) },
+          "Reset card"
+        )
+      ),
+      showDates &&
+        h(
+          "div",
+          { className: "toolbar-extra" },
+          h(Input, { label: "From", type: "date", value: from, onChange: setFrom }),
+          h(Input, { label: "To", type: "date", value: to, onChange: setTo })
+        ),
+      showHeaderEdit &&
+        h(
+          "div",
+          { className: "toolbar-extra" },
+          h(Input, {
+            label: "Title",
+            value: cardCopy.title,
+            maxLength: CUSTOM_TEXT_MAX_LENGTH,
+            placeholder: "Uses GitHub display name",
+            onChange: (value) => updateCardCopy("title", value)
+          }),
+          h(Input, {
+            label: "Subtitle",
+            value: cardCopy.subtitle,
+            maxLength: CUSTOM_TEXT_MAX_LENGTH,
+            placeholder: "Custom subtitle",
+            onChange: (value) => updateCardCopy("subtitle", value)
+          }),
+          h(Input, {
+            label: "Badge",
+            value: cardCopy.badge,
+            maxLength: CUSTOM_TEXT_MAX_LENGTH,
+            placeholder: defaultCardCopy.badge,
+            onChange: (value) => updateCardCopy("badge", value)
+          })
+        )
+    ),
+    h(
+      "div",
+      { className: "dashboard-grid" },
+      h(
         "section",
-        { className: "canvas-zone" },
+        { className: "dashboard-panel card" },
+        h(
+          "div",
+          { className: "panel-head" },
+          h("h2", null, "Order"),
+          h("span", { className: "badge" }, `${ordered.length}`)
+        ),
         h(
           "div",
           {
-            className: `canvas ${theme === "github_light" ? "light" : ""}`,
-            onDragOver: (event) => event.preventDefault(),
-            onDrop: (event) => onDropCanvas(event)
+            className: draggedId ? "panel-body order-list dragging" : "panel-body order-list",
+            onDragOver: onListDragOver,
+            onDrop: (event) => onDrop(event, ordered.length)
           },
-          h(
-            "div",
-            { className: "canvas-head" },
-            h(
-              "div",
-              null,
-              h("strong", null, previewTitle),
-              h("span", null, previewSubtitle)
-            ),
-            h("code", null, `${selectedWidgets.length} elements`)
-          ),
-          h(
-            "div",
-            { className: "drop-stack" },
-            selectedWidgets.length
-              ? selectedWidgets.map((widget, index) =>
+            ordered.length
+              ? ordered.map((item, index) =>
                   h(
-                    "div",
-                    {
-                      key: widget.id,
-                      className: expandedWidget === widget.id ? "drop-block is-expanded" : "drop-block"
-                    },
+                    Fragment,
+                    { key: item.id },
+                    dropIndex === index &&
+                      h("div", { className: "drop-indicator", "aria-hidden": true }),
                     h(
                       "div",
                       {
-                        className: "drop-row",
-                        draggable: true,
-                        onDragStart: (event) => {
-                          const value = `canvas:${widget.id}`;
-                          setDragged(value);
-                          event.dataTransfer.setData("text/plain", value);
-                        },
-                        onDragEnd: () => setDragged(null),
-                        onDragOver: (event) => event.preventDefault(),
-                        onDrop: (event) => onDropCanvas(event, index)
+                        className: draggedId === item.id ? "order-row is-dragging" : "order-row",
+                        onDragOver: (event) => onRowDragOver(event, index),
+                        onDrop: (event) => onDrop(event, dropIndex ?? index)
                       },
-                      h("span", { className: "thread-line", "aria-hidden": true }),
-                      h("span", { className: "grab", "aria-hidden": true }, "::"),
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "drag-btn",
+                          "aria-label": `Drag ${item.label}`,
+                          draggable: true,
+                          onDragStart: (event) => onDragStart(event, item.id),
+                          onDragEnd: endDrag
+                        },
+                        h("svg", { viewBox: "0 0 20 20", width: 16, height: 16, "aria-hidden": true }, h("path", { d: "M7 4h2v2H7V4zm4 0h2v2h-2V4zM7 8h2v2H7V8zm4 0h2v2h-2V8zM7 12h2v2H7v-2zm4 0h2v2h-2v-2z", fill: "currentColor" }))
+                      ),
+                      h("span", { className: "order-rank" }, index + 1),
                       h(
                         "div",
-                        { className: "drop-copy" },
-                        h("strong", null, widgetCopy[widget.id]?.title?.trim() || widget.label),
-                        h(
-                          "small",
-                          null,
-                          widgetCopy[widget.id]?.detail?.trim() || widget.short
-                        )
+                        { className: "order-meta" },
+                        h("strong", null, item.label),
+                        h("span", null, item.group)
                       ),
                       h(
                         "button",
                         {
                           type: "button",
-                          className: "icon-button",
-                          "aria-label": `remove ${widget.label}`,
-                          onClick: () => removeWidget(widget.id)
+                          className: "icon-btn danger",
+                          "aria-label": `Remove ${item.label}`,
+                          onClick: () => removeElement(item.id)
                         },
-                        "x"
+                        "×"
                       )
-                    ),
-                    renderWidgetCustomizer(widget)
+                    )
                   )
                 )
-              : h("div", { className: "empty-canvas" }, "select elements from the left rail")
-          )
+              : h(
+                  "div",
+                  {
+                    className: "empty",
+                    onDragOver: (event) => {
+                      event.preventDefault();
+                      setDropIndex(0);
+                    },
+                    onDrop: (event) => onDrop(event, 0)
+                  },
+                  h("p", null, "No items yet. Add stats or charts below.")
+                ),
+            dropIndex === ordered.length && ordered.length > 0 && h("div", { className: "drop-indicator", "aria-hidden": true })
+        )
+      ),
+      h(
+        "section",
+        { className: "dashboard-panel card" },
+        h(
+          "div",
+          { className: "panel-head" },
+          h("h2", null, "Elements"),
+          h("input", {
+            className: "search",
+            type: "search",
+            value: query,
+            placeholder: "Search…",
+            onChange: (event) => setQuery(event.target.value)
+          })
+        ),
+        h(
+          "div",
+          { className: "panel-body" },
+          filteredGroups.length
+            ? filteredGroups.map((group) =>
+                h(
+                  "div",
+                  { key: group.id, className: "catalog-group" },
+                  h("h3", null, group.label),
+                  h(
+                    "div",
+                    { className: "catalog-grid" },
+                    group.elements.map((element) => {
+                      const active = elements.includes(element.id);
+                      return h(
+                        "button",
+                        {
+                          key: element.id,
+                          type: "button",
+                          className: active ? "catalog-card active" : "catalog-card",
+                          onClick: () => toggleElement(element.id),
+                          onDragStart: (event) => onDragStart(event, element.id),
+                          onDragEnd: endDrag,
+                          draggable: true
+                        },
+                        h("span", { className: "catalog-check" }, active ? "✓" : "+"),
+                        h("strong", null, element.label),
+                        h("small", null, element.desc)
+                      );
+                    })
+                  )
+                )
+              )
+            : h("div", { className: "empty compact" }, h("p", null, "No elements match your search."))
         )
       ),
       h(
         "aside",
-        { className: "output-panel" },
-        h("h2", null, "preview"),
-        username.trim()
-          ? h("img", { className: "svg-preview", src: cardUrl, alt: "Custom GitHub stats card preview" })
-          : h("div", { className: "empty-preview" }),
+        { className: "dashboard-panel card preview-panel" },
+        h("div", { className: "panel-head" }, h("h2", null, "Preview"), h("span", { className: "badge live" }, "Live")),
         h(
           "div",
-          { className: "copy-grid" },
+          { className: "panel-body preview-body" },
           h(
-            "button",
-            { type: "button", onClick: () => copy(cardUrl, "URL") },
-            copied === "URL" ? "copied url" : "copy url"
+            "div",
+            { className: `preview-stage ${theme === "github_light" ? "light" : ""}` },
+            !username.trim()
+              ? h("div", { className: "empty compact" }, h("p", null, "Enter a username to preview."))
+              : !elements.length
+                ? h("div", { className: "empty compact" }, h("p", null, "Add at least one element."))
+                : previewError
+                  ? h("div", { className: "empty compact error" }, h("p", null, "Could not load preview."))
+                  : h("img", {
+                      key: cardUrl,
+                      className: "preview-img",
+                      src: cardUrl,
+                      alt: "GitHub stats card preview",
+                      onLoad: () => setPreviewError(false),
+                      onError: () => setPreviewError(true)
+                    })
           ),
           h(
             "button",
-            { type: "button", onClick: () => copy(markdown, "Markdown") },
-            copied === "Markdown" ? "copied markdown" : "copy markdown"
-          )
-        ),
-        h("textarea", { readOnly: true, value: markdown, rows: 5 })
-      ),
-      toast &&
-        h(
-          "div",
-          { className: "undo-toast", role: "status" },
-          h("span", null, `${toast.label} removed`),
-          h("button", { type: "button", onClick: undoRemove }, "undo")
+            {
+              type: "button",
+              className: "primary-btn",
+              disabled: !markdown,
+              onClick: () => copy(markdown, "markdown")
+            },
+            copied === "markdown" ? "Copied!" : "Copy for README"
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "secondary-btn",
+              disabled: !cardUrl,
+              onClick: () => copy(cardUrl, "url")
+            },
+            copied === "url" ? "URL copied" : "Copy image URL"
+          ),
+          cardUrl &&
+            h("details", { className: "url-details" }, h("summary", null, "View URL"), h("code", null, cardUrl))
         )
-    )
+      )
+    ),
+    toast &&
+      h(
+        "div",
+        { className: "toast", role: "status" },
+        h("span", null, `${toast.label} removed`),
+        h("button", { type: "button", onClick: undoRemove }, "Undo")
+      )
   );
 }
 
-createRoot(document.getElementById("root")).render(h(BuilderApp));
+function App() {
+  const [path, navigate] = usePath();
+
+  return h(
+    "div",
+    { className: path === "/about" ? "site site--about" : "site site--builder" },
+    h(SiteNav, { path, onNavigate: navigate }),
+    path === "/about" ? h(AboutPage, { onNavigate: navigate }) : h(BuilderApp)
+  );
+}
+
+createRoot(document.getElementById("root")).render(h(App));

@@ -23,6 +23,8 @@ function getStaticPath(pathname) {
   return join(publicDir, normalizedPath);
 }
 
+const spaFallbackPaths = new Set(["/about"]);
+
 export async function sendStaticFile(response, pathname) {
   const filePath = getStaticPath(pathname);
 
@@ -38,6 +40,17 @@ export async function sendStaticFile(response, pathname) {
     response.end(content);
     return true;
   } catch {
-    return false;
+    if (!spaFallbackPaths.has(pathname)) {
+      return false;
+    }
+
+    try {
+      const content = await readFile(join(publicDir, "index.html"));
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(content);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

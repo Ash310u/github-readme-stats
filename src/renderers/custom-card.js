@@ -1,26 +1,61 @@
 import { BaseSvgRenderer } from "./base-svg-renderer.js";
-import { parseMetricLabels, sanitizeCustomText } from "../utils/custom-text.js";
+import { sanitizeCustomText } from "../utils/custom-text.js";
 import { escapeHtml, formatNumber } from "../utils/format.js";
 
-export const customWidgetDefinitions = {
-  stats: { label: "Summary", height: 126 },
-  heatmap: { label: "Contribution Heatmap", height: 142 },
-  weekly: { label: "Weekly Contributions", height: 142 },
-  chart: { label: "Contribution Stats", height: 126 },
-  languages: { label: "Languages", height: 150 },
-  repos: { label: "Repository Stats", height: 126 },
-  activity: { label: "Activity", height: 126 }
+export const customElementDefinitions = {
+  stars: { label: "Stars", type: "metric", source: "stats", valueKey: "totalStars", displayLabel: "Stars", accent: true },
+  commits: { label: "Commits", type: "metric", source: "stats", valueKey: "totalCommits", displayLabel: "Commits" },
+  prs: { label: "Pull Requests", type: "metric", source: "stats", valueKey: "totalPullRequests", displayLabel: "Pull Requests" },
+  issues: { label: "Issues", type: "metric", source: "stats", valueKey: "totalIssues", displayLabel: "Issues" },
+  contributed: { label: "Contributed To", type: "metric", source: "stats", valueKey: "contributedTo", displayLabel: "Contributed To" },
+  total_contributions: {
+    label: "Total Contributions",
+    type: "metric",
+    source: "chart",
+    valueKey: "totalContributions",
+    displayLabel: "Total Contributions",
+    accent: true
+  },
+  current_streak: {
+    label: "Current Streak",
+    type: "metric",
+    source: "chart",
+    valueKey: "currentStreak",
+    displayLabel: "Current Streak"
+  },
+  longest_streak: {
+    label: "Longest Streak",
+    type: "metric",
+    source: "chart",
+    valueKey: "longestStreak",
+    displayLabel: "Longest Streak"
+  },
+  public_repos: { label: "Public Repos", type: "metric", source: "repos", valueKey: "publicRepos", displayLabel: "Public Repos" },
+  forks: { label: "Forks", type: "metric", source: "repos", valueKey: "totalForks", displayLabel: "Forks" },
+  repo_stars: { label: "Repo Stars", type: "metric", source: "repos", valueKey: "totalStars", displayLabel: "Stars", accent: true },
+  followers: { label: "Followers", type: "metric", source: "repos", valueKey: "followers", displayLabel: "Followers" },
+  following: { label: "Following", type: "metric", source: "repos", valueKey: "following", displayLabel: "Following" },
+  heatmap: { label: "Contribution Heatmap", type: "block", source: "heatmap", height: 142 },
+  weekly: { label: "Weekly Contributions", type: "block", source: "weekly", height: 142 },
+  languages: { label: "Languages", type: "block", source: "languages", height: 150 },
+  activity: { label: "Activity", type: "block", source: "activity", height: 126 }
 };
 
-export const customWidgetMetricKeys = {
+const widgetElementMap = {
   stats: ["stars", "commits", "prs", "issues", "contributed"],
-  chart: ["total", "current_streak", "longest_streak"],
-  repos: ["public_repos", "forks", "stars", "followers", "following"],
-  activity: ["commits", "prs", "issues"]
+  chart: ["total_contributions", "current_streak", "longest_streak"],
+  repos: ["public_repos", "forks", "repo_stars", "followers", "following"],
+  heatmap: ["heatmap"],
+  weekly: ["weekly"],
+  languages: ["languages"],
+  activity: ["activity"]
 };
 
-export const defaultCustomWidgets = ["stats", "heatmap", "weekly"];
+export const defaultCustomElements = ["stars", "commits", "prs", "issues", "contributed", "heatmap", "weekly"];
 
+const METRIC_ROW_HEIGHT = 88;
+const METRIC_SLOT_WIDTH = 170;
+const METRICS_PER_ROW = 5;
 const CUSTOM_CARD_FOOTER = "generated with ash310u stats";
 
 const defaultCardCopy = {
@@ -31,37 +66,49 @@ const defaultCardCopy = {
 
 export function parseCustomWidgets(value) {
   if (value === null) {
-    return defaultCustomWidgets;
+    return Object.keys(widgetElementMap);
   }
 
-  const widgets = value
+  return value
     .split(",")
     .map((widget) => widget.trim())
-    .filter((widget) => customWidgetDefinitions[widget]);
+    .filter((widget) => widgetElementMap[widget]);
+}
 
-  return [...new Set(widgets)];
+function expandWidgetsToElements(widgets) {
+  return [...new Set(widgets.flatMap((widget) => widgetElementMap[widget] || []))];
+}
+
+export function parseCustomElements(elementsValue, widgetsValue = null) {
+  if (elementsValue !== null && elementsValue !== undefined) {
+    const elements = elementsValue
+      .split(",")
+      .map((element) => element.trim())
+      .filter((element) => customElementDefinitions[element]);
+
+    return [...new Set(elements)];
+  }
+
+  if (widgetsValue !== null && widgetsValue !== undefined) {
+    const widgets = parseCustomWidgets(widgetsValue);
+    return expandWidgetsToElements(widgets);
+  }
+
+  return [...defaultCustomElements];
+}
+
+export function getElementSources(elements) {
+  return [...new Set(elements.map((element) => customElementDefinitions[element].source))];
 }
 
 export function parseCardCustomization(searchParams) {
-  const card = {
-    title: sanitizeCustomText(searchParams.get("title")),
-    subtitle: sanitizeCustomText(searchParams.get("subtitle")),
-    badge: sanitizeCustomText(searchParams.get("badge")) || defaultCardCopy.badge
-  };
-
-  const widgets = {};
-
-  for (const widgetId of Object.keys(customWidgetDefinitions)) {
-    const title = sanitizeCustomText(searchParams.get(`label_${widgetId}`));
-    const detail = sanitizeCustomText(searchParams.get(`detail_${widgetId}`));
-    const metrics = parseMetricLabels(searchParams.get(`metrics_${widgetId}`));
-
-    if (title || detail || Object.keys(metrics).length > 0) {
-      widgets[widgetId] = { title, detail, metrics };
+  return {
+    card: {
+      title: sanitizeCustomText(searchParams.get("title")),
+      subtitle: sanitizeCustomText(searchParams.get("subtitle")),
+      badge: sanitizeCustomText(searchParams.get("badge")) || defaultCardCopy.badge
     }
-  }
-
-  return { card, widgets };
+  };
 }
 
 function renderMetric(theme, { label, value, x, y, width = 150, accent = false }) {
@@ -82,43 +129,82 @@ function getHeatmapLevel(count) {
   return 4;
 }
 
-class CustomCardRenderer extends BaseSvgRenderer {
-  constructor({ widgets, themeName, customization = { card: defaultCardCopy, widgets: {} } }) {
-    const height =
-      112 + widgets.reduce((sum, widget) => sum + customWidgetDefinitions[widget].height, 0) + 42;
+function calculateCardHeight(elements) {
+  let height = 112;
+  let metricCount = 0;
 
+  for (const elementId of elements) {
+    const definition = customElementDefinitions[elementId];
+
+    if (definition.type === "metric") {
+      metricCount += 1;
+      continue;
+    }
+
+    if (metricCount > 0) {
+      height += Math.ceil(metricCount / METRICS_PER_ROW) * METRIC_ROW_HEIGHT + 8;
+      metricCount = 0;
+    }
+
+    height += definition.height;
+  }
+
+  if (metricCount > 0) {
+    height += Math.ceil(metricCount / METRICS_PER_ROW) * METRIC_ROW_HEIGHT + 8;
+  }
+
+  return height + 42;
+}
+
+class CustomCardRenderer extends BaseSvgRenderer {
+  constructor({ elements, themeName, customization = { card: defaultCardCopy } }) {
     super({
       width: 860,
-      height,
+      height: calculateCardHeight(elements),
       themeName,
       fallbackTheme: "github_dark"
     });
 
-    this.widgets = widgets;
+    this.elements = elements;
     this.customization = customization;
     this.padding = 32;
   }
 
-  widgetCopy(widgetId) {
-    return this.customization.widgets[widgetId] || { title: "", detail: "", metrics: {} };
-  }
-
-  metricLabel(widgetId, key, fallback) {
-    return this.widgetCopy(widgetId).metrics[key] || fallback;
-  }
-
   render(payload) {
-    const profile = payload.stats || payload.heatmap || payload.weekly || payload.chart;
+    this.payload = payload;
+    const profile =
+      payload.stats || payload.heatmap || payload.weekly || payload.chart || payload.repos || payload.activity;
     const displayName = this.customization.card.title || profile?.name || profile?.username || payload.username;
     const defaultSubtitle = `@${profile?.username || payload.username} · custom GitHub profile card`;
     const subtitle = this.customization.card.subtitle || defaultSubtitle;
     let y = 106;
+    let metricBuffer = [];
 
-    const sections = this.widgets
-      .map((widget) => {
-        const markup = this.renderWidget(widget, payload[widget], y);
-        y += customWidgetDefinitions[widget].height;
-        return markup;
+    const flushMetrics = () => {
+      if (metricBuffer.length === 0) {
+        return "";
+      }
+
+      const markup = this.renderMetricGroup(metricBuffer, y);
+      const rows = Math.ceil(metricBuffer.length / METRICS_PER_ROW);
+      y += rows * METRIC_ROW_HEIGHT + 8;
+      metricBuffer = [];
+      return markup;
+    };
+
+    const sections = this.elements
+      .map((elementId) => {
+        const definition = customElementDefinitions[elementId];
+
+        if (definition.type === "metric") {
+          metricBuffer.push({ elementId, definition });
+          return "";
+        }
+
+        const metricsMarkup = flushMetrics();
+        const blockMarkup = this.renderBlock(elementId, payload[definition.source], y);
+        y += definition.height;
+        return metricsMarkup + blockMarkup;
       })
       .join("");
 
@@ -130,80 +216,71 @@ class CustomCardRenderer extends BaseSvgRenderer {
     <text x="${this.padding}" y="70" fill="${this.theme.muted}" font-size="14">${escapeHtml(subtitle)}</text>
     <text x="${this.width - this.padding}" y="56" text-anchor="end" fill="${this.theme.accent}" font-size="13" font-weight="700">${escapeHtml(this.customization.card.badge)}</text>
     <line x1="${this.padding}" y1="88" x2="${this.width - this.padding}" y2="88" stroke="${this.theme.border}"/>
-    ${sections}
+    ${sections}${flushMetrics()}
     ${this.footer(CUSTOM_CARD_FOOTER)}
   `
     });
   }
 
-  renderWidget(widget, stats, y) {
+  renderMetricGroup(metrics, y) {
+    return metrics
+      .map((metric, index) => {
+        const row = Math.floor(index / METRICS_PER_ROW);
+        const column = index % METRICS_PER_ROW;
+        const x = this.padding + column * METRIC_SLOT_WIDTH;
+        const rowY = y + row * METRIC_ROW_HEIGHT + 38;
+        const data = metric.definition;
+        const stats = this.payload?.[data.source];
+        const value = stats?.[data.valueKey] ?? 0;
+        const isLastInRow = column === METRICS_PER_ROW - 1 || index === metrics.length - 1;
+
+        return renderMetric(this.theme, {
+          label: data.displayLabel,
+          value,
+          x,
+          y: rowY,
+          width: isLastInRow ? 0 : 150,
+          accent: data.accent
+        });
+      })
+      .join("");
+  }
+
+  renderBlock(elementId, stats, y) {
     if (!stats) {
-      return this.emptySection(widget, y);
+      return this.emptyBlock(elementId, y);
     }
 
     const renderers = {
-      stats: () => this.summary(stats, y),
-      chart: () => this.contributionStats(stats, y),
-      repos: () => this.repos(stats, y),
-      activity: () => this.activity(stats, y),
-      languages: () => this.languages(stats, y),
       heatmap: () => this.heatmap(stats, y),
-      weekly: () => this.weekly(stats, y)
+      weekly: () => this.weekly(stats, y),
+      languages: () => this.languages(stats, y),
+      activity: () => this.activity(stats, y)
     };
 
-    return renderers[widget]();
+    return renderers[elementId]();
   }
 
-  sectionTitle(widgetId, y, fallbackLabel, fallbackDetail = "") {
-    const copy = this.widgetCopy(widgetId);
-    const label = copy.title || fallbackLabel;
-    const detail = copy.detail || fallbackDetail;
-
+  sectionTitle(label, y, detail = "") {
     return `
     <text x="${this.padding}" y="${y}" fill="${this.theme.text}" font-size="15" font-weight="750">${escapeHtml(label)}</text>
     <text x="${this.width - this.padding}" y="${y}" text-anchor="end" fill="${this.theme.muted}" font-size="12">${escapeHtml(detail)}</text>`;
   }
 
-  emptySection(widget, y) {
+  emptyBlock(elementId, y) {
+    const definition = customElementDefinitions[elementId];
+
     return `
-    ${this.sectionTitle(widget, y, customWidgetDefinitions[widget].label)}
+    ${this.sectionTitle(definition.label, y)}
     <text x="${this.padding}" y="${y + 36}" fill="${this.theme.muted}" font-size="13">No data available.</text>`;
-  }
-
-  summary(stats, y) {
-    return `
-    ${this.sectionTitle("stats", y, "Summary")}
-    ${renderMetric(this.theme, { label: this.metricLabel("stats", "stars", "Stars"), value: stats.totalStars, x: 32, y: y + 38, accent: true })}
-    ${renderMetric(this.theme, { label: this.metricLabel("stats", "commits", "Commits"), value: stats.totalCommits, x: 202, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("stats", "prs", "Pull Requests"), value: stats.totalPullRequests, x: 372, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("stats", "issues", "Issues"), value: stats.totalIssues, x: 542, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("stats", "contributed", "Contributed To"), value: stats.contributedTo, x: 712, y: y + 38, width: 0 })}`;
-  }
-
-  contributionStats(stats, y) {
-    return `
-    ${this.sectionTitle("chart", y, "Contribution Stats", stats.rangeLabel)}
-    ${renderMetric(this.theme, { label: this.metricLabel("chart", "total", "Total Contributions"), value: stats.totalContributions, x: 32, y: y + 38, width: 210, accent: true })}
-    ${renderMetric(this.theme, { label: this.metricLabel("chart", "current_streak", "Current Streak"), value: stats.currentStreak, x: 282, y: y + 38, width: 210 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("chart", "longest_streak", "Longest Streak"), value: stats.longestStreak, x: 532, y: y + 38, width: 0 })}`;
-  }
-
-  repos(stats, y) {
-    return `
-    ${this.sectionTitle("repos", y, "Repository Stats")}
-    ${renderMetric(this.theme, { label: this.metricLabel("repos", "public_repos", "Public Repos"), value: stats.publicRepos, x: 32, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("repos", "forks", "Forks"), value: stats.totalForks, x: 202, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("repos", "stars", "Stars"), value: stats.totalStars, x: 372, y: y + 38, accent: true })}
-    ${renderMetric(this.theme, { label: this.metricLabel("repos", "followers", "Followers"), value: stats.followers, x: 542, y: y + 38 })}
-    ${renderMetric(this.theme, { label: this.metricLabel("repos", "following", "Following"), value: stats.following, x: 712, y: y + 38, width: 0 })}`;
   }
 
   activity(stats, y) {
     const total = stats.total || 1;
     const segments = [
-      { key: "commits", label: this.metricLabel("activity", "commits", "Commits"), value: stats.totalCommits, color: this.theme.chart[0] },
-      { key: "prs", label: this.metricLabel("activity", "prs", "PRs"), value: stats.totalPullRequests, color: this.theme.chart[1] },
-      { key: "issues", label: this.metricLabel("activity", "issues", "Issues"), value: stats.totalIssues, color: this.theme.chart[2] }
+      { label: "Commits", value: stats.totalCommits, color: this.theme.chart[0] },
+      { label: "PRs", value: stats.totalPullRequests, color: this.theme.chart[1] },
+      { label: "Issues", value: stats.totalIssues, color: this.theme.chart[2] }
     ];
     let x = this.padding;
     const bars = segments
@@ -223,7 +300,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
       .join("");
 
     return `
-    ${this.sectionTitle("activity", y, "Activity", `${formatNumber(stats.total)} total`)}
+    ${this.sectionTitle("Activity", y, `${formatNumber(stats.total)} total`)}
     ${bars}
     ${legend}`;
   }
@@ -244,7 +321,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
       .join("");
 
     return `
-    ${this.sectionTitle("languages", y, "Languages", `${formatNumber(stats.totalRepos)} repos`)}
+    ${this.sectionTitle("Languages", y, `${formatNumber(stats.totalRepos)} repos`)}
     ${rows || `<text x="${this.padding}" y="${y + 52}" fill="${this.theme.muted}" font-size="13">No language data available.</text>`}`;
   }
 
@@ -266,10 +343,10 @@ class CustomCardRenderer extends BaseSvgRenderer {
       )
       .join("");
 
-    const defaultDetail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
+    const detail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
 
     return `
-    ${this.sectionTitle("heatmap", y, "Contribution Heatmap", defaultDetail)}
+    ${this.sectionTitle("Contribution Heatmap", y, detail)}
     ${heatmap}`;
   }
 
@@ -286,14 +363,14 @@ class CustomCardRenderer extends BaseSvgRenderer {
       })
       .join("");
 
-    const defaultDetail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
+    const detail = `${formatNumber(stats.totalContributions)} contributions · ${stats.rangeLabel}`;
 
     return `
-    ${this.sectionTitle("weekly", y, "Weekly Contributions", defaultDetail)}
+    ${this.sectionTitle("Weekly Contributions", y, detail)}
     ${bars}`;
   }
 }
 
-export function renderCustomCardSvg(payload, themeName, widgets, customization) {
-  return new CustomCardRenderer({ widgets, themeName, customization }).render(payload);
+export function renderCustomCardSvg(payload, themeName, elements, customization) {
+  return new CustomCardRenderer({ elements, themeName, customization }).render(payload);
 }

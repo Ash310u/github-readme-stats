@@ -317,9 +317,9 @@ const customFetchers = {
   weekly: fetchWeeklyContributionStats
 };
 
-export async function fetchCustomCardStats(username, widgets, options = {}) {
+export async function fetchCustomCardStats(username, sources, options = {}) {
   const entries = await Promise.all(
-    widgets.map(async (widget) => [widget, await customFetchers[widget](username, options)])
+    sources.map(async (source) => [source, await customFetchers[source](username, options)])
   );
 
   return {

@@ -37,7 +37,7 @@ export async function routeRequest(request, response) {
       ok: true,
       endpoints: {
         stats: "/api/stats?username=Ash310u",
-        custom: "/api/stats/custom?username=Ash310u&theme=github_dark&widgets=stats,heatmap,weekly",
+        custom: "/api/stats/custom?username=Ash310u&theme=github_dark&elements=stars,prs,issues,heatmap",
         chart: "/api/stats/chart?username=Ash310u",
         languages: "/api/stats/languages?username=Ash310u",
         repos: "/api/stats/repos?username=Ash310u",

@@ -10,23 +10,3 @@ export function sanitizeCustomText(value) {
     .trim()
     .slice(0, CUSTOM_TEXT_MAX_LENGTH);
 }
-
-export function parseMetricLabels(value) {
-  if (!value) {
-    return {};
-  }
-
-  const metrics = {};
-
-  for (const pair of value.split(",")) {
-    const [rawKey, ...rawLabelParts] = pair.split(":");
-    const key = rawKey?.trim();
-    const label = sanitizeCustomText(rawLabelParts.join(":"));
-
-    if (key && label) {
-      metrics[key] = label;
-    }
-  }
-
-  return metrics;
-}

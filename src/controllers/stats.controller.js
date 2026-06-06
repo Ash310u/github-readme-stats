@@ -9,7 +9,12 @@ import {
   fetchWeeklyContributionStats
 } from "../services/stats.service.js";
 import { renderActivityCardSvg } from "../renderers/activity-card.js";
-import { parseCardCustomization, parseCustomWidgets, renderCustomCardSvg } from "../renderers/custom-card.js";
+import {
+  getElementSources,
+  parseCardCustomization,
+  parseCustomElements,
+  renderCustomCardSvg
+} from "../renderers/custom-card.js";
 import { renderHeatmapCardSvg } from "../renderers/heatmap-card.js";
 import { renderLanguagesCardSvg } from "../renderers/languages-card.js";
 import { renderReposCardSvg } from "../renderers/repos-card.js";
@@ -155,18 +160,28 @@ export async function handleCustom(request, response, url) {
 
   const { format, from, to } = getRequestOptions(url);
   const theme = url.searchParams.get("theme") || "github_dark";
-  const widgets = parseCustomWidgets(url.searchParams.get("widgets"));
+  const elementsParam = url.searchParams.has("elements") ? url.searchParams.get("elements") : null;
+  const widgetsParam = url.searchParams.has("widgets") ? url.searchParams.get("widgets") : null;
+  const elements = parseCustomElements(elementsParam, widgetsParam);
+  const sources = getElementSources(elements);
   const customization = parseCardCustomization(url.searchParams);
 
+  if (elements.length === 0) {
+    sendJson(response, 400, {
+      error: "At least one valid element is required. Use the elements query parameter."
+    });
+    return;
+  }
+
   try {
-    const stats = await fetchCustomCardStats(username, widgets, { from, to });
+    const stats = await fetchCustomCardStats(username, sources, { from, to });
 
     if (format === "json") {
-      sendJson(response, 200, { widgets, customization, ...stats });
+      sendJson(response, 200, { elements, customization, ...stats });
       return;
     }
 
-    sendSvg(response, renderCustomCardSvg(stats, theme || "github_dark", widgets, customization));
+    sendSvg(response, renderCustomCardSvg(stats, theme || "github_dark", elements, customization));
   } catch (error) {
     handleError(response, error, "Unable to fetch custom GitHub stats card");
   }
