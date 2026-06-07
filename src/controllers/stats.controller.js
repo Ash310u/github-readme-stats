@@ -164,7 +164,7 @@ export async function handleCustom(request, response, url) {
   const widgetsParam = url.searchParams.has("widgets") ? url.searchParams.get("widgets") : null;
   const elements = parseCustomElements(elementsParam, widgetsParam);
   const sources = getElementSources(elements);
-  const customization = parseCardCustomization(url.searchParams);
+  const customization = parseCardCustomization(url.searchParams, elements);
 
   if (elements.length === 0) {
     sendJson(response, 400, {

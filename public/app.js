@@ -59,6 +59,45 @@ const themes = [
   { id: "github_light", label: "Light" }
 ];
 
+const clientThemes = {
+  github_dark: {
+    accent: "#58a6ff",
+    text: "#c9d1d9",
+    chart: ["#58a6ff", "#bc8cff", "#f778ba", "#ffa657", "#3fb950", "#ff7b72"],
+    heatmap: ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"]
+  },
+  github_light: {
+    accent: "#0969da",
+    text: "#24292f",
+    chart: ["#0969da", "#8250df", "#bf3989", "#bc4c00", "#1b7c83", "#cf222e"],
+    heatmap: ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"]
+  }
+};
+
+const accentMetrics = new Set(["stars", "total_contributions", "repo_stars"]);
+
+function getThemeDefaultColor(themeId, elementId) {
+  const theme = clientThemes[themeId] || clientThemes.github_dark;
+
+  if (accentMetrics.has(elementId)) {
+    return theme.accent;
+  }
+
+  if (elementId === "weekly") {
+    return theme.accent;
+  }
+
+  if (elementId === "heatmap") {
+    return theme.heatmap[4];
+  }
+
+  if (elementId === "languages" || elementId === "activity") {
+    return theme.chart[0];
+  }
+
+  return theme.text;
+}
+
 const defaultCardCopy = { title: "", subtitle: "", badge: "github-stats" };
 const defaultElements = ["stars", "commits", "prs", "issues", "contributed", "heatmap", "weekly"];
 const PREVIEW_DEBOUNCE_MS = 600;
@@ -104,7 +143,7 @@ const datePresets = [
   { id: "custom", label: "Custom" }
 ];
 
-function buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy }) {
+function buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy, elementColors = {} }) {
   const params = new URLSearchParams({
     username: username.trim(),
     theme,
@@ -121,6 +160,16 @@ function buildCardUrl({ username, elements, theme, datePreset, from, to, cardCop
   if (cardCopy.subtitle.trim()) params.set("subtitle", clampCustomText(cardCopy.subtitle).trim());
   if (cardCopy.badge.trim() && cardCopy.badge.trim() !== defaultCardCopy.badge) {
     params.set("badge", clampCustomText(cardCopy.badge).trim());
+  }
+
+  for (const elementId of elements) {
+    const override = elementColors[elementId];
+    if (!override) continue;
+
+    const defaultColor = getThemeDefaultColor(theme, elementId);
+    if (override.toLowerCase() !== defaultColor.toLowerCase()) {
+      params.set(`color_${elementId}`, override.replace("#", ""));
+    }
   }
 
   return `${window.location.origin}/api/stats/custom?${params.toString()}`;
@@ -312,6 +361,7 @@ function BuilderApp() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [elements, setElements] = useState([...defaultElements]);
+  const [elementColors, setElementColors] = useState({});
   const [cardCopy, setCardCopy] = useState({ ...defaultCardCopy });
   const [query, setQuery] = useState("");
   const [showDates, setShowDates] = useState(false);
@@ -355,14 +405,33 @@ function BuilderApp() {
   const cardUrl = useMemo(
     () =>
       elements.length && username.trim()
-        ? buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy })
+        ? buildCardUrl({ username, elements, theme, datePreset, from, to, cardCopy, elementColors })
         : "",
-    [username, elements, theme, datePreset, from, to, cardCopy]
+    [username, elements, theme, datePreset, from, to, cardCopy, elementColors]
   );
   const markdown = cardUrl ? `![github stats](${cardUrl})` : "";
 
   function updateCardCopy(key, value) {
     setCardCopy((current) => ({ ...current, [key]: clampCustomText(value) }));
+  }
+
+  function getEffectiveElementColor(elementId) {
+    return elementColors[elementId] || getThemeDefaultColor(theme, elementId);
+  }
+
+  function updateElementColor(elementId, color) {
+    const normalized = String(color).toLowerCase();
+    const defaultColor = getThemeDefaultColor(theme, elementId).toLowerCase();
+
+    setElementColors((current) => {
+      const next = { ...current };
+      if (normalized === defaultColor) {
+        delete next[elementId];
+      } else {
+        next[elementId] = normalized;
+      }
+      return next;
+    });
   }
 
   function toggleElement(id) {
@@ -462,7 +531,12 @@ function BuilderApp() {
     h(
       "div",
       { className: "panel-head" },
-      h("h2", null, "Order"),
+      h(
+        "div",
+        { className: "panel-head-title" },
+        h("h2", null, "Order"),
+        h("span", { className: "panel-hint" }, "Theme colors by default")
+      ),
       h("span", { className: "badge" }, `${ordered.length}`)
     ),
     h(
@@ -506,6 +580,19 @@ function BuilderApp() {
                 ),
                 h("span", { className: "order-rank" }, index + 1),
                 h("div", { className: "order-meta" }, h("strong", null, item.label), h("span", null, item.group)),
+                h(
+                  "label",
+                  {
+                    className: elementColors[item.id] ? "order-color is-custom" : "order-color",
+                    title: elementColors[item.id] ? "Custom color (theme default available)" : "Theme color"
+                  },
+                  h("input", {
+                    type: "color",
+                    value: getEffectiveElementColor(item.id),
+                    onChange: (event) => updateElementColor(item.id, event.target.value),
+                    "aria-label": `Color for ${item.label}`
+                  })
+                ),
                 h(
                   "button",
                   {
@@ -700,7 +787,14 @@ function BuilderApp() {
             ),
             h(
               "button",
-              { type: "button", className: "ghost-btn", onClick: () => setElements([...defaultElements]) },
+              {
+                type: "button",
+                className: "ghost-btn",
+                onClick: () => {
+                  setElements([...defaultElements]);
+                  setElementColors({});
+                }
+              },
               "Reset card"
             )
           )

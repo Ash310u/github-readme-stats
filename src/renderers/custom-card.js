@@ -1,4 +1,5 @@
 import { BaseSvgRenderer } from "./base-svg-renderer.js";
+import { buildHeatmapPalette, parseElementColors, sanitizeHexColor } from "../utils/color.js";
 import { sanitizeCustomText } from "../utils/custom-text.js";
 import { escapeHtml, formatNumber } from "../utils/format.js";
 
@@ -103,23 +104,49 @@ export function getElementSources(elements) {
   return [...new Set(elements.map((element) => customElementDefinitions[element].source))];
 }
 
-export function parseCardCustomization(searchParams) {
+export function parseCardCustomization(searchParams, elements = []) {
   return {
     card: {
       title: sanitizeCustomText(searchParams.get("title")),
       subtitle: sanitizeCustomText(searchParams.get("subtitle")),
       badge: sanitizeCustomText(searchParams.get("badge")) || defaultCardCopy.badge
-    }
+    },
+    colors: parseElementColors(searchParams, elements)
   };
 }
 
-function renderMetric(theme, { label, value, x, y, width = 150, accent = false }) {
-  const color = accent ? theme.accent : theme.text;
+function getDefaultElementColor(theme, elementId) {
+  const definition = customElementDefinitions[elementId];
+
+  if (definition?.accent) {
+    return theme.accent;
+  }
+
+  if (definition?.type === "metric") {
+    return theme.text;
+  }
+
+  if (elementId === "weekly") {
+    return theme.accent;
+  }
+
+  if (elementId === "heatmap") {
+    return theme.heatmap[4];
+  }
+
+  if (elementId === "languages" || elementId === "activity") {
+    return theme.chart[0];
+  }
+
+  return theme.text;
+}
+
+function renderMetric(theme, { label, value, x, y, width = 150, valueColor }) {
   const display = typeof value === "number" ? formatNumber(value) : value;
 
   return `
     <text x="${x}" y="${y}" fill="${theme.muted}" font-size="12" font-weight="600">${escapeHtml(label)}</text>
-    <text x="${x}" y="${y + 28}" fill="${color}" font-size="23" font-weight="750">${escapeHtml(display)}</text>
+    <text x="${x}" y="${y + 28}" fill="${valueColor}" font-size="23" font-weight="750">${escapeHtml(display)}</text>
     <line x1="${x + width}" y1="${y - 12}" x2="${x + width}" y2="${y + 36}" stroke="${theme.border}" opacity="0.65"/>`;
 }
 
@@ -159,7 +186,7 @@ function calculateCardHeight(elements) {
 }
 
 class CustomCardRenderer extends BaseSvgRenderer {
-  constructor({ elements, themeName, customization = { card: defaultCardCopy } }) {
+  constructor({ elements, themeName, customization = { card: defaultCardCopy, colors: {} } }) {
     super({
       width: 860,
       height: calculateCardHeight(elements),
@@ -168,8 +195,25 @@ class CustomCardRenderer extends BaseSvgRenderer {
     });
 
     this.elements = elements;
-    this.customization = customization;
+    this.customization = {
+      card: customization.card || defaultCardCopy,
+      colors: customization.colors || {}
+    };
     this.padding = 32;
+  }
+
+  elementColor(elementId) {
+    const customColor = sanitizeHexColor(this.customization.colors?.[elementId]);
+    return customColor || getDefaultElementColor(this.theme, elementId);
+  }
+
+  heatmapPalette() {
+    const customColor = sanitizeHexColor(this.customization.colors?.heatmap);
+    if (!customColor) {
+      return this.theme.heatmap;
+    }
+
+    return buildHeatmapPalette(customColor, this.theme.heatmap[0]) || this.theme.heatmap;
   }
 
   render(payload) {
@@ -243,7 +287,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
           x,
           y: rowY,
           width: isLastInRow ? 0 : 150,
-          accent: data.accent
+          valueColor: this.elementColor(metric.elementId)
         });
       })
       .join("");
@@ -280,11 +324,18 @@ class CustomCardRenderer extends BaseSvgRenderer {
 
   activity(stats, y) {
     const total = stats.total || 1;
-    const segments = [
-      { label: "Commits", value: stats.totalCommits, color: this.theme.chart[0] },
-      { label: "PRs", value: stats.totalPullRequests, color: this.theme.chart[1] },
-      { label: "Issues", value: stats.totalIssues, color: this.theme.chart[2] }
-    ];
+    const customActivityColor = sanitizeHexColor(this.customization.colors?.activity);
+    const segments = customActivityColor
+      ? [
+          { label: "Commits", value: stats.totalCommits, color: customActivityColor },
+          { label: "PRs", value: stats.totalPullRequests, color: customActivityColor },
+          { label: "Issues", value: stats.totalIssues, color: customActivityColor }
+        ]
+      : [
+          { label: "Commits", value: stats.totalCommits, color: this.theme.chart[0] },
+          { label: "PRs", value: stats.totalPullRequests, color: this.theme.chart[1] },
+          { label: "Issues", value: stats.totalIssues, color: this.theme.chart[2] }
+        ];
     let x = this.padding;
     const bars = segments
       .map((segment) => {
@@ -314,7 +365,9 @@ class CustomCardRenderer extends BaseSvgRenderer {
       .map((language, index) => {
         const rowY = y + 38 + index * LANGUAGE_ROW_GAP;
         const width = Math.max((language.count / maxCount) * 420, 4);
-        const color = this.theme.chart[index % this.theme.chart.length];
+        const color = this.customization.colors?.languages
+          ? this.elementColor("languages")
+          : this.theme.chart[index % this.theme.chart.length];
 
         return `
     <text x="${this.padding}" y="${rowY + 11}" fill="${this.theme.text}" font-size="12" font-weight="650">${escapeHtml(language.name)}</text>
@@ -333,6 +386,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
     const gap = 2;
     const maxWeeks = Math.min(stats.weeks.length, 52);
     const weeks = stats.weeks.slice(-maxWeeks);
+    const palette = this.heatmapPalette();
     const heatmap = weeks
       .map((week, weekIndex) =>
         week.contributionDays
@@ -340,7 +394,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
             const x = this.padding + weekIndex * (cellSize + gap);
             const cy = y + 40 + dayIndex * (cellSize + gap);
             const level = getHeatmapLevel(day.contributionCount);
-            return `<rect x="${x}" y="${cy}" width="${cellSize}" height="${cellSize}" rx="2" fill="${this.theme.heatmap[level]}"><title>${escapeHtml(day.date)}: ${day.contributionCount} contributions</title></rect>`;
+            return `<rect x="${x}" y="${cy}" width="${cellSize}" height="${cellSize}" rx="2" fill="${palette[level]}"><title>${escapeHtml(day.date)}: ${day.contributionCount} contributions</title></rect>`;
           })
           .join("")
       )
@@ -362,7 +416,7 @@ class CustomCardRenderer extends BaseSvgRenderer {
         const barHeight = Math.max((week.value / maxValue) * chartHeight, week.value > 0 ? 2 : 0);
         const x = this.padding + index * 19;
         const by = chartY + chartHeight - barHeight;
-        return `<rect x="${x}" y="${by}" width="12" height="${barHeight}" rx="3" fill="${this.theme.accent}"><title>${escapeHtml(week.label)}: ${week.value} contributions</title></rect>`;
+        return `<rect x="${x}" y="${by}" width="12" height="${barHeight}" rx="3" fill="${this.elementColor("weekly")}"><title>${escapeHtml(week.label)}: ${week.value} contributions</title></rect>`;
       })
       .join("");
 
